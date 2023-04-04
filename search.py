@@ -1,10 +1,14 @@
 import queue
 import requests
 import time
+import copy
 import chess
 import argparse
 import functools
 import math
+import sys
+import concurrent.futures
+import multiprocessing
 from urllib import parse
 
 
@@ -26,10 +30,20 @@ class ChessDB:
         self.count_queryall = 0
         self.count_uncached = 0
         self.count_enqueued = 0
-        self.count_timeneeded = 0
+        self.count_inflightRequests = 0
+        self.count_sumInflightRequests = 0
+        self.count_starttime = time.perf_counter()
 
-    def __init__(self):
+    def __init__(self, treeConcurrency, workConcurrency):
+        self.treeConcurrency = treeConcurrency
+        self.workConcurrency = workConcurrency
         self.session = requests.Session()
+        self.executorTree = [
+            concurrent.futures.ThreadPoolExecutor(max_workers=self.treeConcurrency)
+        ]
+        self.executorWork = concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.workConcurrency
+        )
         self.cache = {}
         self.reset_counts()
 
@@ -37,11 +51,11 @@ class ChessDB:
         """query chessdb until scored moves come back"""
 
         self.count_queryall += 1
+        self.count_sumInflightRequests += self.count_inflightRequests
 
         if epd in self.cache:
             return self.cache[epd]
 
-        tic = time.perf_counter()
         self.count_uncached += 1
 
         api = "http://www.chessdb.cn/cdb.php"
@@ -67,44 +81,50 @@ class ChessDB:
 
             url = api + "?action=queryall&board=" + parse.quote(epd) + "&json=1"
             try:
+                self.count_inflightRequests += 1
                 response = self.session.get(url, timeout=timeout)
+                self.count_inflightRequests -= 1
                 response.raise_for_status()
                 content = response.json()
             except Exception:
-                lasterror="Something went wrong with queryall"
+                lasterror = "Something went wrong with queryall"
                 continue
 
             if "status" not in content:
-                lasterror="Malformed reply, not containing status"
+                lasterror = "Malformed reply, not containing status"
                 continue
 
             if content["status"] == "unknown":
                 # unknown position, queue and see again
                 if not enqueued:
-                   enqueued = True
-                   self.count_enqueued += 1
+                    enqueued = True
+                    self.count_enqueued += 1
 
                 url = api + "?action=queue&board=" + parse.quote(epd) + "&json=1"
                 try:
+                    self.count_inflightRequests += 1
                     response = self.session.get(url, timeout=timeout)
+                    self.count_inflightRequests -= 1
                     response.raise_for_status()
                     content = response.json()
                 except Exception:
-                    lasterror="Something went wrong with queue"
+                    lasterror = "Something went wrong with queue"
                     continue
 
-                lasterror="Enqueued position"
+                lasterror = "Enqueued position"
                 continue
 
             elif content["status"] == "rate limit exceeded":
                 # special case, request to clear the limit
                 url = api + "?action=clearlimit"
                 try:
+                    self.count_inflightRequests += 1
                     response = self.session.get(url, timeout=timeout)
+                    self.count_inflightRequests -= 1
                     response.raise_for_status()
                 except Exception:
                     pass
-                lasterror="asked to clearlimit"
+                lasterror = "asked to clearlimit"
                 continue
 
             elif content["status"] == "ok":
@@ -113,70 +133,86 @@ class ChessDB:
                     for m in content["moves"]:
                         result[m["uci"]] = m["score"]
                 else:
-                    lasterror="Unexpectedly missing moves"
+                    lasterror = "Unexpectedly missing moves"
                     continue
 
             elif content["status"] == "checkmate" or content["status"] == "stalemate":
                 found = True
 
             else:
-                lasterror="Surprise reply"
+                lasterror = "Surprise reply"
                 continue
 
         self.cache[epd] = result
-        toc = time.perf_counter()
-        self.count_timeneeded += toc - tic
 
         return result
 
     def search(self, board, depth):
 
         if board.is_checkmate():
-           return (-40000, [None])
+            return (-40000, [None])
 
-        if board.is_stalemate() or board.is_insufficient_material() or board.can_claim_draw():
-           return (0, [None])
+        if (
+            board.is_stalemate()
+            or board.is_insufficient_material()
+            or board.can_claim_draw()
+        ):
+            return (0, [None])
 
-        # get current ranking
-        scored_db_moves = self.queryall(board.epd())
+        # get current ranking, use an executor to limit total requests in flight
+        scored_db_moves = self.executorWork.submit(self.queryall, board.epd()).result()
 
         bestscore = -40001
         bestmove = None
 
         for m in scored_db_moves:
             if m == "depth":
-               continue
+                continue
             s = scored_db_moves[m]
             if s > bestscore:
-               bestscore = s
-               bestmove = m
+                bestscore = s
+                bestmove = m
 
         if depth <= scored_db_moves["depth"]:
-           return (bestscore, [bestmove])
+            return (bestscore, [bestmove])
 
-        newly_scored_moves = {"depth" : depth}
+        # guarantee sufficient depth of the executorTree list
+        ply = board.ply()
+        while len(self.executorTree) < ply + 1:
+            self.executorTree.append(
+                concurrent.futures.ThreadPoolExecutor(max_workers=self.treeConcurrency)
+            )
+
+        newly_scored_moves = {"depth": depth}
 
         minicache = {}
+        futures = {}
         newmoves = 0
         for move in board.legal_moves:
             ucimove = move.uci()
             indb = ucimove in scored_db_moves
             if indb:
-               # decrement depth for moves
-               newdepth = depth + (scored_db_moves[ucimove] - bestscore) // 3 - 1 
+                # decrement depth for moves
+                newdepth = depth + (scored_db_moves[ucimove] - bestscore) // 3 - 1
             else:
-               newmoves += 1
-               newdepth = depth - 5 - len(scored_db_moves) - newmoves
+                newmoves += 1
+                newdepth = depth - 5 - len(scored_db_moves) - newmoves
 
             if newdepth >= 0:
-               board.push(move)
-               s, pv = self.search(board, newdepth)
-               minicache[ucimove] = [ucimove] + pv
-               newly_scored_moves[ucimove] = -s
-               board.pop()
+                board.push(move)
+                futures[ucimove] = self.executorTree[ply].submit(
+                    self.search, copy.deepcopy(board), newdepth
+                )
+                board.pop()
             elif indb:
-               newly_scored_moves[ucimove] = scored_db_moves[ucimove]
-               minicache[ucimove] = [ucimove]
+                newly_scored_moves[ucimove] = scored_db_moves[ucimove]
+                minicache[ucimove] = [ucimove]
+
+        # get the results from the futures
+        for ucimove in futures:
+            s, pv = futures[ucimove].result()
+            minicache[ucimove] = [ucimove] + pv
+            newly_scored_moves[ucimove] = -s
 
         self.cache[board.epd()] = newly_scored_moves
 
@@ -185,11 +221,13 @@ class ChessDB:
 
         for m in newly_scored_moves:
             if m == "depth":
-               continue
+                continue
             s = newly_scored_moves[m]
-            if s > bestscore or (s == bestscore and len(minicache[m]) > len(minicache[bestmove])):
-               bestscore = s
-               bestmove = m
+            if s > bestscore or (
+                s == bestscore and len(minicache[m]) > len(minicache[bestmove])
+            ):
+                bestscore = s
+                bestmove = m
 
         return (bestscore, minicache[bestmove])
 
@@ -206,23 +244,32 @@ if __name__ == "__main__":
     epd = args.epd
 
     # create a ChessDB
-    chessdb = ChessDB()
+    chessdb = ChessDB(treeConcurrency=8, workConcurrency=16)
 
     # set initial board
     board = chess.Board(epd)
     depth = 1
     while True:
-       bestscore, pv = chessdb.search(board, depth)
-       pvline = ""
-       for m in pv:
-           pvline += m + " "
-       print( "Search at depth ", depth)
-       print( "  score     : ", bestscore)
-       print( "  PV        : ", pvline)
-       print( "  queryall  : ", chessdb.count_queryall)
-       print( "  chessdbq  : ", chessdb.count_uncached)
-       print( "  enqueued  : ", chessdb.count_enqueued)
-       print( "  total time: ", int(1000 * chessdb.count_timeneeded))
-       print( "  req. time : ", int(1000 * chessdb.count_timeneeded / chessdb.count_uncached))
-       print(f'  bf        :  { math.exp(math.log(chessdb.count_queryall)/depth) :.2f}')
-       depth += 1
+        bestscore, pv = chessdb.search(board, depth)
+        pvline = ""
+        for m in pv:
+            pvline += m + " "
+        runtime = time.perf_counter() - chessdb.count_starttime
+        print("Search at depth ", depth)
+        print("  score     : ", bestscore)
+        print("  PV        : ", pvline)
+        print("  queryall  : ", chessdb.count_queryall)
+        print(
+            f"  inflight  : { chessdb.count_sumInflightRequests / chessdb.count_queryall : .2f}"
+        )
+        print("  chessdbq  : ", chessdb.count_uncached)
+        print("  enqueued  : ", chessdb.count_enqueued)
+        print("  total time: ", int(1000 * runtime))
+        print(
+            "  req. time : ",
+            int(1000 * runtime / chessdb.count_uncached),
+        )
+        print(
+            f"  bf        :  { math.exp(math.log(chessdb.count_queryall)/depth) :.2f}"
+        )
+        depth += 1
