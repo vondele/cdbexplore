@@ -34,15 +34,14 @@ class ChessDB:
         self.count_sumInflightRequests = 0
         self.count_starttime = time.perf_counter()
 
-    def __init__(self, treeConcurrency, workConcurrency):
-        self.treeConcurrency = treeConcurrency
-        self.workConcurrency = workConcurrency
+    def __init__(self, concurrency):
+        self.concurrency = concurrency
         self.session = requests.Session()
         self.executorTree = [
-            concurrent.futures.ThreadPoolExecutor(max_workers=self.treeConcurrency)
+            concurrent.futures.ThreadPoolExecutor(max_workers=self.concurrency)
         ]
         self.executorWork = concurrent.futures.ThreadPoolExecutor(
-            max_workers=self.workConcurrency
+            max_workers=self.concurrency
         )
         self.cache = {}
         self.reset_counts()
@@ -180,7 +179,7 @@ class ChessDB:
         ply = board.ply()
         while len(self.executorTree) < ply + 1:
             self.executorTree.append(
-                concurrent.futures.ThreadPoolExecutor(max_workers=self.treeConcurrency)
+                concurrent.futures.ThreadPoolExecutor(max_workers=self.concurrency)
             )
 
         newly_scored_moves = {"depth": depth}
@@ -244,7 +243,7 @@ if __name__ == "__main__":
     epd = args.epd
 
     # create a ChessDB
-    chessdb = ChessDB(treeConcurrency=8, workConcurrency=16)
+    chessdb = ChessDB(concurrency=16)
 
     # set initial board
     board = chess.Board(epd)
