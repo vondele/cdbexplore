@@ -58,7 +58,7 @@ class ChessDB:
         self.count_uncached += 1
 
         api = "http://www.chessdb.cn/cdb.php"
-        timeout = 10
+        timeout = 5
         found = False
         first = True
         enqueued = False
@@ -163,6 +163,7 @@ class ChessDB:
 
         bestscore = -40001
         bestmove = None
+        worstscore = +40001
 
         for m in scored_db_moves:
             if m == "depth":
@@ -171,6 +172,8 @@ class ChessDB:
             if s > bestscore:
                 bestscore = s
                 bestmove = m
+            if (s < worstscore):
+                worstscore = s
 
         if depth <= scored_db_moves["depth"]:
             return (bestscore, [bestmove])
@@ -192,10 +195,11 @@ class ChessDB:
             indb = ucimove in scored_db_moves
             if indb:
                 # decrement depth for moves
-                newdepth = depth + (scored_db_moves[ucimove] - bestscore) // 3 - 1
+                newdepth = depth + (scored_db_moves[ucimove] - bestscore) // 2 - 1
             else:
                 newmoves += 1
-                newdepth = depth - 5 - len(scored_db_moves) - newmoves
+                # new moves at most depth 0 search, and assume they are worse than the worst move so far.
+                newdepth = min(0, depth + (worstscore - bestscore) // 2 - 1 - newmoves)
 
             if newdepth >= 0:
                 board.push(move)
@@ -215,7 +219,7 @@ class ChessDB:
 
         self.cache[board.epd()] = newly_scored_moves
 
-        bestscore = -40001
+        bestscore  = -40001
         bestmove = None
 
         for m in newly_scored_moves:
