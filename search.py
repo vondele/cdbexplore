@@ -10,7 +10,7 @@ import sys
 import concurrent.futures
 import multiprocessing
 from urllib import parse
-
+from datetime import datetime
 
 def timer(func):
     @functools.wraps(func)
@@ -73,7 +73,7 @@ class ChessDB:
                 if timeout < 60:
                     timeout = timeout * 1.5
                 else:
-                    print("Failed to get reply for: ", epd, " last error: ", lasterror)
+                    print(datetime.now().isoformat()," - failed to get reply for : ", epd, " last error: ", lasterror)
                 time.sleep(timeout)
             else:
                 first = False
@@ -243,11 +243,22 @@ if __name__ == "__main__":
         help="epd to explore",
         default="rnbqkbnr/ppp1pppp/8/3p4/6P1/8/PPPPPP1P/RNBQKBNR w KQkq d6",
     )
+    argParser.add_argument(
+        "--concurrency",
+        help="concurrency of requests",
+        type=int,
+        default=16,
+    )
     args = argParser.parse_args()
     epd = args.epd
 
+    # basic output
+    print("Searched epd : ", epd)
+    print("Concurrency  : ", args.concurrency)
+    print("Starting date: ", datetime.now().isoformat())
+
     # create a ChessDB
-    chessdb = ChessDB(concurrency=16)
+    chessdb = ChessDB(concurrency=args.concurrency)
 
     # set initial board
     board = chess.Board(epd)
@@ -263,16 +274,17 @@ if __name__ == "__main__":
         print("  PV        : ", pvline)
         print("  queryall  : ", chessdb.count_queryall)
         print(
+            f"  bf        :  { math.exp(math.log(chessdb.count_queryall)/depth) :.2f}"
+        )
+        print(
             f"  inflight  : { chessdb.count_sumInflightRequests / chessdb.count_queryall : .2f}"
         )
         print("  chessdbq  : ", chessdb.count_uncached)
         print("  enqueued  : ", chessdb.count_enqueued)
+        print("  date      : ", datetime.now().isoformat())
         print("  total time: ", int(1000 * runtime))
         print(
             "  req. time : ",
             int(1000 * runtime / chessdb.count_uncached),
-        )
-        print(
-            f"  bf        :  { math.exp(math.log(chessdb.count_queryall)/depth) :.2f}"
         )
         depth += 1
