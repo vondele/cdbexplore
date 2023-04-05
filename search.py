@@ -12,6 +12,7 @@ import multiprocessing
 from urllib import parse
 from datetime import datetime
 
+
 def timer(func):
     @functools.wraps(func)
     def wrapper_timer(*args, **kwargs):
@@ -34,8 +35,9 @@ class ChessDB:
         self.count_sumInflightRequests = 0
         self.count_starttime = time.perf_counter()
 
-    def __init__(self, concurrency):
+    def __init__(self, concurrency, evalDecay):
         self.concurrency = concurrency
+        self.evalDecay = evalDecay
         self.session = requests.Session()
         self.executorTree = [
             concurrent.futures.ThreadPoolExecutor(max_workers=self.concurrency)
@@ -73,7 +75,13 @@ class ChessDB:
                 if timeout < 60:
                     timeout = timeout * 1.5
                 else:
-                    print(datetime.now().isoformat()," - failed to get reply for : ", epd, " last error: ", lasterror)
+                    print(
+                        datetime.now().isoformat(),
+                        " - failed to get reply for : ",
+                        epd,
+                        " last error: ",
+                        lasterror,
+                    )
                 time.sleep(timeout)
             else:
                 first = False
@@ -195,11 +203,27 @@ class ChessDB:
             indb = ucimove in scored_db_moves
             if indb:
                 # decrement depth for moves
-                newdepth = depth + (scored_db_moves[ucimove] - bestscore) // 2 - 1
+                if (scored_db_moves[ucimove] - bestscore) == 0:
+                    decay = 0
+                else:
+                    decay = (
+                        (scored_db_moves[ucimove] - bestscore) // self.evalDecay
+                        if self.evalDecay != 0
+                        else -100
+                    )
+                newdepth = depth + decay - 1
             else:
                 newmoves += 1
                 # new moves at most depth 0 search, and assume they are worse than the worst move so far.
-                newdepth = min(0, depth + (worstscore - bestscore) // 2 - 1 - newmoves)
+                if (worstscore - bestscore) == 0:
+                    decay = 0
+                else:
+                    decay = (
+                        (worstscore - bestscore) // self.evalDecay
+                        if self.evalDecay != 0
+                        else -100
+                    )
+                newdepth = min(0, depth + decay - 1 - newmoves)
 
             if newdepth >= 0:
                 board.push(move)
@@ -249,16 +273,23 @@ if __name__ == "__main__":
         type=int,
         default=16,
     )
+    argParser.add_argument(
+        "--evalDecay",
+        help="depth decrease per cp eval-to-best",
+        type=int,
+        default=2,
+    )
     args = argParser.parse_args()
     epd = args.epd
 
     # basic output
     print("Searched epd : ", epd)
+    print("evalDecay: ", args.evalDecay)
     print("Concurrency  : ", args.concurrency)
     print("Starting date: ", datetime.now().isoformat())
 
     # create a ChessDB
-    chessdb = ChessDB(concurrency=args.concurrency)
+    chessdb = ChessDB(concurrency=args.concurrency, evalDecay=args.evalDecay)
 
     # set initial board
     board = chess.Board(epd)
