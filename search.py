@@ -40,7 +40,9 @@ class ChessDB:
         self.evalDecay = evalDecay
         self.session = requests.Session()
         self.executorTree = [
-            concurrent.futures.ThreadPoolExecutor(max_workers=self.concurrency)
+            concurrent.futures.ThreadPoolExecutor(
+                max_workers=max(2, self.concurrency // 4)
+            )
         ]
         self.executorWork = concurrent.futures.ThreadPoolExecutor(
             max_workers=self.concurrency
@@ -81,6 +83,7 @@ class ChessDB:
                         epd,
                         " last error: ",
                         lasterror,
+                        flush=True,
                     )
                 time.sleep(timeout)
             else:
@@ -318,4 +321,5 @@ if __name__ == "__main__":
             "  req. time : ",
             int(1000 * runtime / chessdb.count_uncached),
         )
+        print("", flush=True)
         depth += 1
