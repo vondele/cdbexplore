@@ -172,7 +172,7 @@ class ChessDB:
             if s > bestscore:
                 bestscore = s
                 bestmove = m
-            if (s < worstscore):
+            if s < worstscore:
                 worstscore = s
 
         if depth <= scored_db_moves["depth"]:
@@ -219,7 +219,7 @@ class ChessDB:
 
         self.cache[board.epd()] = newly_scored_moves
 
-        bestscore  = -40001
+        bestscore = -40001
         bestmove = None
 
         for m in newly_scored_moves:
