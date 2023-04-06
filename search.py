@@ -7,6 +7,7 @@ import argparse
 import functools
 import math
 import sys
+import threading
 import concurrent.futures
 import multiprocessing
 from urllib import parse
@@ -39,6 +40,8 @@ class ChessDB:
         self.concurrency = concurrency
         self.evalDecay = evalDecay
         self.session = requests.Session()
+        # At each level in the tree we need a few threads.
+        # Evaluations can happen at any level, so we can saturate the work executor nevertheless
         self.executorTree = [
             concurrent.futures.ThreadPoolExecutor(
                 max_workers=max(2, self.concurrency // 4)
@@ -284,6 +287,10 @@ if __name__ == "__main__":
     )
     args = argParser.parse_args()
     epd = args.epd
+
+    # limit stack size of created threads, many are created
+    stackSize = 4096 * 64
+    threading.stack_size(stackSize)
 
     # basic output
     print("Searched epd : ", epd)
