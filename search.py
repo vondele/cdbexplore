@@ -14,32 +14,51 @@ from urllib import parse
 from datetime import datetime
 
 
-def timer(func):
-    @functools.wraps(func)
-    def wrapper_timer(*args, **kwargs):
-        tic = time.perf_counter()
-        value = func(*args, **kwargs)
-        toc = time.perf_counter()
-        elapsed_time = toc - tic
-        print(f"Elapsed time: {elapsed_time:0.4f} seconds")
-        return value
+class AtomicInteger:
+    def __init__(self, value=0):
+        self._value = int(value)
+        self._lock = threading.Lock()
 
-    return wrapper_timer
+    def inc(self, d=1):
+        with self._lock:
+            self._value += int(d)
+            return self._value
+
+    def dec(self, d=1):
+        return self.inc(-d)
+
+    def get(self):
+        with self._lock:
+            return self._value
+
+    def set(self, v):
+        with self._lock:
+            self._value = int(v)
+            return self._value
 
 
 class ChessDB:
-    def reset_counts(self):
-        self.count_queryall = 0
-        self.count_uncached = 0
-        self.count_enqueued = 0
-        self.count_inflightRequests = 0
-        self.count_sumInflightRequests = 0
-        self.count_starttime = time.perf_counter()
-
     def __init__(self, concurrency, evalDecay):
+        # user defined parameters
         self.concurrency = concurrency
         self.evalDecay = evalDecay
+
+        # some counters that will be accessed by multiple threads
+        self.count_queryall = AtomicInteger(0)
+        self.count_uncached = AtomicInteger(0)
+        self.count_enqueued = AtomicInteger(0)
+        self.count_inflightRequests = AtomicInteger(0)
+        self.count_sumInflightRequests = AtomicInteger(0)
+
+        # for timing output
+        self.count_starttime = time.perf_counter()
+
+        # use a session to keep alive the connection to the server
         self.session = requests.Session()
+
+        # our dictionary to cache intermediate results
+        self.cache = {}
+
         # At each level in the tree we need a few threads.
         # Evaluations can happen at any level, so we can saturate the work executor nevertheless
         self.executorTree = [
@@ -50,19 +69,28 @@ class ChessDB:
         self.executorWork = concurrent.futures.ThreadPoolExecutor(
             max_workers=self.concurrency
         )
-        self.cache = {}
-        self.reset_counts()
+
+    def __apicall(self, url, timeout):
+        self.count_inflightRequests.inc()
+        try:
+            response = self.session.get(url, timeout=timeout)
+            response.raise_for_status()
+            content = response.json()
+        except Exception:
+            content = None
+        self.count_inflightRequests.dec()
+        return content
 
     def queryall(self, epd):
         """query chessdb until scored moves come back"""
 
-        self.count_queryall += 1
-        self.count_sumInflightRequests += self.count_inflightRequests
+        self.count_queryall.inc()
+        self.count_sumInflightRequests.inc(self.count_inflightRequests.get())
 
         if epd in self.cache:
             return self.cache[epd]
 
-        self.count_uncached += 1
+        self.count_uncached.inc()
 
         api = "http://www.chessdb.cn/cdb.php"
         timeout = 5
@@ -93,13 +121,9 @@ class ChessDB:
                 first = False
 
             url = api + "?action=queryall&board=" + parse.quote(epd) + "&json=1"
-            try:
-                self.count_inflightRequests += 1
-                response = self.session.get(url, timeout=timeout)
-                self.count_inflightRequests -= 1
-                response.raise_for_status()
-                content = response.json()
-            except Exception:
+            content = self.__apicall(url, timeout)
+
+            if content is None:
                 lasterror = "Something went wrong with queryall"
                 continue
 
@@ -111,16 +135,11 @@ class ChessDB:
                 # unknown position, queue and see again
                 if not enqueued:
                     enqueued = True
-                    self.count_enqueued += 1
+                    self.count_enqueued.inc()
 
                 url = api + "?action=queue&board=" + parse.quote(epd) + "&json=1"
-                try:
-                    self.count_inflightRequests += 1
-                    response = self.session.get(url, timeout=timeout)
-                    self.count_inflightRequests -= 1
-                    response.raise_for_status()
-                    content = response.json()
-                except Exception:
+                content = self.__apicall(url, timeout)
+                if content is None:
                     lasterror = "Something went wrong with queue"
                     continue
 
@@ -130,13 +149,7 @@ class ChessDB:
             elif content["status"] == "rate limit exceeded":
                 # special case, request to clear the limit
                 url = api + "?action=clearlimit"
-                try:
-                    self.count_inflightRequests += 1
-                    response = self.session.get(url, timeout=timeout)
-                    self.count_inflightRequests -= 1
-                    response.raise_for_status()
-                except Exception:
-                    pass
+                self.__apicall(url, timeout)
                 lasterror = "asked to clearlimit"
                 continue
 
@@ -313,20 +326,20 @@ if __name__ == "__main__":
         print("Search at depth ", depth)
         print("  score     : ", bestscore)
         print("  PV        : ", pvline)
-        print("  queryall  : ", chessdb.count_queryall)
+        print("  queryall  : ", chessdb.count_queryall.get())
         print(
-            f"  bf        :  { math.exp(math.log(chessdb.count_queryall)/depth) :.2f}"
+            f"  bf        :  { math.exp(math.log(chessdb.count_queryall.get())/depth) :.2f}"
         )
         print(
-            f"  inflight  : { chessdb.count_sumInflightRequests / chessdb.count_queryall : .2f}"
+            f"  inflight  : { chessdb.count_sumInflightRequests.get() / chessdb.count_queryall.get() : .2f}"
         )
-        print("  chessdbq  : ", chessdb.count_uncached)
-        print("  enqueued  : ", chessdb.count_enqueued)
+        print("  chessdbq  : ", chessdb.count_uncached.get())
+        print("  enqueued  : ", chessdb.count_enqueued.get())
         print("  date      : ", datetime.now().isoformat())
         print("  total time: ", int(1000 * runtime))
         print(
             "  req. time : ",
-            int(1000 * runtime / chessdb.count_uncached),
+            int(1000 * runtime / chessdb.count_uncached.get()),
         )
         print("", flush=True)
         depth += 1
