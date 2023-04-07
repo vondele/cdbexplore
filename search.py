@@ -195,14 +195,14 @@ class ChessDB:
     def search(self, board, depth):
 
         if board.is_checkmate():
-            return (-40000, [None])
+            return (-40000, ["checkmate"])
 
         if (
             board.is_stalemate()
             or board.is_insufficient_material()
             or board.can_claim_draw()
         ):
-            return (0, [None])
+            return (0, ["draw"])
 
         # get current ranking, use an executor to limit total requests in flight
         scored_db_moves = self.executorWork.submit(self.queryall, board.epd()).result()
@@ -220,9 +220,6 @@ class ChessDB:
                 bestmove = m
             if s < worstscore:
                 worstscore = s
-
-        if depth <= scored_db_moves["depth"]:
-            return (bestscore, [bestmove])
 
         # guarantee sufficient depth of the executorTree list
         ply = board.ply()
@@ -279,8 +276,8 @@ class ChessDB:
             minicache[ucimove] = [ucimove] + pv
             newly_scored_moves[ucimove] = -s
 
-        # store our computed result, and get best version so far
-        newly_scored_moves = self.TT.set(board.epd(), newly_scored_moves)
+        # store our computed result
+        self.TT.set(board.epd(), newly_scored_moves)
 
         bestscore = -40001
         bestmove = None
