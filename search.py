@@ -301,7 +301,7 @@ if __name__ == "__main__":
     argParser.add_argument(
         "--epd",
         help="epd to explore",
-        default="rnbqkbnr/ppp1pppp/8/3p4/6P1/8/PPPPPP1P/RNBQKBNR w KQkq d6",
+        default="rnbqkbnr/pppppppp/8/8/6P1/8/PPPPPP1P/RNBQKBNR b KQkq g3",
     )
     argParser.add_argument(
         "--concurrency",
