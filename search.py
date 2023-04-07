@@ -13,19 +13,22 @@ import multiprocessing
 from urllib import parse
 from datetime import datetime
 
+
 class AtomicTT:
     def __init__(self):
         self._lock = threading.Lock()
         self.cache = {}
 
-    def get(epd)
+    def get(self, epd):
         with self._lock:
-             return self.cache.get(epd)
+            return self.cache.get(epd)
 
-    def set(epd, result)
+    def set(self, epd, result):
         with self._lock:
-           if epd not in self.cache or self.cache[epd][depth] <= result[depth]:
-              self.cache[epd] = result
+            if epd not in self.cache or self.cache[epd]["depth"] <= result["depth"]:
+                self.cache[epd] = result
+            return self.cache[epd]
+
 
 class AtomicInteger:
     def __init__(self, value=0):
@@ -70,7 +73,7 @@ class ChessDB:
         self.session = requests.Session()
 
         # our dictionary to cache intermediate results
-        TT = AtomicTT()
+        self.TT = AtomicTT()
 
         # At each level in the tree we need a few threads.
         # Evaluations can happen at any level, so we can saturate the work executor nevertheless
@@ -102,9 +105,9 @@ class ChessDB:
         self.count_sumInflightRequests.inc(self.count_inflightRequests.get())
 
         # see if we can return this result from the TT
-        result = self.TT.get()
-        if result is not None
-           return result
+        result = self.TT.get(epd)
+        if result is not None:
+            return result
 
         # if uncached retrieve from chessdb
         self.count_uncached.inc()
@@ -186,9 +189,8 @@ class ChessDB:
                 lasterror = "Surprise reply"
                 continue
 
-        # we have a result, store it and return
-        TT.set(epd, result)
-        return result
+        # set and return a possibly even deeper result
+        return self.TT.set(epd, result)
 
     def search(self, board, depth):
 
@@ -277,10 +279,8 @@ class ChessDB:
             minicache[ucimove] = [ucimove] + pv
             newly_scored_moves[ucimove] = -s
 
-        # store our computed result
-        TT.set(board.epd(), newly_scored_moves)
-        # but also probe once more to ensure we have the deepest version of it.
-        newly_scored_moves = TT.get(board.epd())
+        # store our computed result, and get best version so far
+        newly_scored_moves = self.TT.set(board.epd(), newly_scored_moves)
 
         bestscore = -40001
         bestmove = None
