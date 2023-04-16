@@ -121,7 +121,6 @@ class ChessDB:
         lasterror = ""
 
         while not found:
-
             # sleep a bit before further requests
             if not first:
                 # adjust timeout increasing after every attempt, up to a max.
@@ -193,7 +192,6 @@ class ChessDB:
         return self.TT.set(epd, result)
 
     def search(self, board, depth):
-
         if board.is_checkmate():
             return (-40000, ["checkmate"])
 
@@ -296,8 +294,9 @@ class ChessDB:
 
 
 if __name__ == "__main__":
-
-    argParser = argparse.ArgumentParser()
+    argParser = argparse.ArgumentParser(description="Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position (FEN/EPD)",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     argParser.add_argument(
         "--epd",
         help="epd to explore",
@@ -305,13 +304,13 @@ if __name__ == "__main__":
     )
     argParser.add_argument(
         "--concurrency",
-        help="concurrency of requests",
+        help="concurrency of requests. This is the maximum number of requests made to chessdb at the same time.",
         type=int,
         default=16,
     )
     argParser.add_argument(
         "--evalDecay",
-        help="depth decrease per cp eval-to-best",
+        help="depth decrease per cp eval-to-best. A small number will use a very narrow search, 0 will essentially just follow PV lines. A wide search will likely enqueue many positions",
         type=int,
         default=2,
     )
