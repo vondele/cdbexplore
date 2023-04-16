@@ -1,2 +1,2 @@
-chess==1.9.4
+chess
 Requests
