@@ -97,7 +97,7 @@ class ChessDB:
         self.count_inflightRequests.dec()
         return content
 
-    def queryall(self, epd):
+    def queryall(self, epd, skipTT):
         """query chessdb until scored moves come back"""
 
         # book keeping of calls and average in flight requests.
@@ -105,9 +105,10 @@ class ChessDB:
         self.count_sumInflightRequests.inc(self.count_inflightRequests.get())
 
         # see if we can return this result from the TT
-        result = self.TT.get(epd)
-        if result is not None:
-            return result
+        if not skipTT:
+            result = self.TT.get(epd)
+            if result is not None:
+                return result
 
         # if uncached retrieve from chessdb
         self.count_uncached.inc()
@@ -203,7 +204,21 @@ class ChessDB:
             return (0, ["draw"])
 
         # get current ranking, use an executor to limit total requests in flight
-        scored_db_moves = self.executorWork.submit(self.queryall, board.epd()).result()
+        scored_db_moves = self.executorWork.submit(
+            self.queryall, board.epd(), skipTT=False
+        ).result()
+
+        # also force a query for high depth moves that do not have a full list of scored moves,
+        # we use this to add newly scored moves to our TT
+        skipTT_db_moves = None
+        if depth > 10:
+            for move in board.legal_moves:
+                ucimove = move.uci()
+                if ucimove not in scored_db_moves:
+                    skipTT_db_moves = self.executorWork.submit(
+                        self.queryall, board.epd(), skipTT=True
+                    )
+                    break
 
         bestscore = -40001
         bestmove = None
@@ -274,6 +289,15 @@ class ChessDB:
             minicache[ucimove] = [ucimove] + pv
             newly_scored_moves[ucimove] = -s
 
+        # add potentially newly scored moves
+        if skipTT_db_moves:
+            skipTT_db_moves = skipTT_db_moves.result()
+            for move in board.legal_moves:
+                ucimove = move.uci()
+                if ucimove in skipTT_db_moves and ucimove not in newly_scored_moves:
+                    newly_scored_moves[ucimove] = skipTT_db_moves[ucimove]
+                    minicache[ucimove] = [ucimove]
+
         # store our computed result
         self.TT.set(board.epd(), newly_scored_moves)
 
@@ -294,8 +318,9 @@ class ChessDB:
 
 
 if __name__ == "__main__":
-    argParser = argparse.ArgumentParser(description="Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position (FEN/EPD)",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    argParser = argparse.ArgumentParser(
+        description="Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position (FEN/EPD)",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     argParser.add_argument(
         "--epd",
