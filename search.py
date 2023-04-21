@@ -289,14 +289,21 @@ class ChessDB:
             minicache[ucimove] = [ucimove] + pv
             newly_scored_moves[ucimove] = -s
 
-        # add potentially newly scored moves
+        # add potentially newly scored moves, or moves we have not explored by search
         if skipTT_db_moves:
             skipTT_db_moves = skipTT_db_moves.result()
             for move in board.legal_moves:
                 ucimove = move.uci()
-                if ucimove in skipTT_db_moves and ucimove not in newly_scored_moves:
-                    newly_scored_moves[ucimove] = skipTT_db_moves[ucimove]
-                    minicache[ucimove] = [ucimove]
+                if ucimove in skipTT_db_moves:
+                   if ucimove not in newly_scored_moves:
+                      newly_scored_moves[ucimove] = skipTT_db_moves[ucimove]
+                      minicache[ucimove] = [ucimove]
+                   elif newly_scored_moves[ucimove] != skipTT_db_moves[ucimove]:
+                      board.push(move)
+                      if self.TT.get(board.epd()) is None:
+                         newly_scored_moves[ucimove] = skipTT_db_moves[ucimove]
+                         minicache[ucimove] = [ucimove]
+                      board.pop()
 
         # store our computed result
         self.TT.set(board.epd(), newly_scored_moves)
