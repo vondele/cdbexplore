@@ -192,6 +192,23 @@ class ChessDB:
         # set and return a possibly even deeper result
         return self.TT.set(epd, result)
 
+    # query all positions along the PV back to the root
+    def reprobe_PV(self, board, PV):
+        local_board = copy.deepcopy(board)
+        for ucimove in PV:
+            try:
+                move = chess.Move.from_uci(ucimove)
+                local_board.push(move)
+            except Exception:
+                pass
+
+        while True:
+            self.executorWork.submit(self.queryall, local_board.epd(), skipTT=True)
+            try:
+                local_board.pop()
+            except Exception:
+                break
+
     def search(self, board, depth):
         if board.is_checkmate():
             return (-40000, ["checkmate"])
@@ -295,15 +312,15 @@ class ChessDB:
             for move in board.legal_moves:
                 ucimove = move.uci()
                 if ucimove in skipTT_db_moves:
-                   if ucimove not in newly_scored_moves:
-                      newly_scored_moves[ucimove] = skipTT_db_moves[ucimove]
-                      minicache[ucimove] = [ucimove]
-                   elif newly_scored_moves[ucimove] != skipTT_db_moves[ucimove]:
-                      board.push(move)
-                      if self.TT.get(board.epd()) is None:
-                         newly_scored_moves[ucimove] = skipTT_db_moves[ucimove]
-                         minicache[ucimove] = [ucimove]
-                      board.pop()
+                    if ucimove not in newly_scored_moves:
+                        newly_scored_moves[ucimove] = skipTT_db_moves[ucimove]
+                        minicache[ucimove] = [ucimove]
+                    elif newly_scored_moves[ucimove] != skipTT_db_moves[ucimove]:
+                        board.push(move)
+                        if self.TT.get(board.epd()) is None:
+                            newly_scored_moves[ucimove] = skipTT_db_moves[ucimove]
+                            minicache[ucimove] = [ucimove]
+                        board.pop()
 
         # store our computed result
         self.TT.set(board.epd(), newly_scored_moves)
@@ -320,6 +337,9 @@ class ChessDB:
             ):
                 bestscore = s
                 bestmove = m
+
+        if depth > 20:
+            self.reprobe_PV(board, minicache[bestmove])
 
         return (bestscore, minicache[bestmove])
 
