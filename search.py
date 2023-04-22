@@ -209,6 +209,11 @@ class ChessDB:
             except Exception:
                 break
 
+    def move_depth(self, bestscore, worstscore, score, depth):
+        delta = score - bestscore if score else worstscore - bestscore
+        decay = delta // self.evalDecay if self.evalDecay != 0 else -100
+        return depth + decay - 1 if score else min(0, depth + decay - 1 - 1)
+
     def search(self, board, depth):
         if board.is_checkmate():
             return (-40000, ["checkmate"])
@@ -260,43 +265,36 @@ class ChessDB:
 
         newly_scored_moves = {"depth": depth}
 
-        minicache = {}
-        futures = {}
-        newmoves = 0
+        tried_unscored = False
+        moves_to_search = 0
         for move in board.legal_moves:
             ucimove = move.uci()
-            indb = ucimove in scored_db_moves
-            if indb:
-                # decrement depth for moves
-                if (scored_db_moves[ucimove] - bestscore) == 0:
-                    decay = 0
-                else:
-                    decay = (
-                        (scored_db_moves[ucimove] - bestscore) // self.evalDecay
-                        if self.evalDecay != 0
-                        else -100
-                    )
-                newdepth = depth + decay - 1
-            else:
-                newmoves += 1
-                # new moves at most depth 0 search, and assume they are worse than the worst move so far.
-                if (worstscore - bestscore) == 0:
-                    decay = 0
-                else:
-                    decay = (
-                        (worstscore - bestscore) // self.evalDecay
-                        if self.evalDecay != 0
-                        else -100
-                    )
-                newdepth = min(0, depth + decay - 1 - newmoves)
+            score = scored_db_moves.get(ucimove, None)
+            newdepth = self.move_depth(bestscore, worstscore, score, depth)
+            if newdepth >= 0 and not tried_unscored:
+                moves_to_search += 1
 
-            if newdepth >= 0:
+        minicache = {}
+        futures = {}
+        tried_unscored = False
+
+        for move in board.legal_moves:
+            ucimove = move.uci()
+            score = scored_db_moves.get(ucimove, None)
+            newdepth = self.move_depth(bestscore, worstscore, score, depth)
+
+            # extension
+            if moves_to_search == 1 and bestscore == score and depth > 4:
+                newdepth += 1
+
+            if newdepth >= 0 and not tried_unscored:
                 board.push(move)
                 futures[ucimove] = self.executorTree[ply].submit(
                     self.search, copy.deepcopy(board), newdepth
                 )
                 board.pop()
-            elif indb:
+                tried_unscored = True if score is None else tried_unscored
+            elif score is not None:
                 newly_scored_moves[ucimove] = scored_db_moves[ucimove]
                 minicache[ucimove] = [ucimove]
 
@@ -338,7 +336,7 @@ class ChessDB:
                 bestscore = s
                 bestmove = m
 
-        if depth > 20:
+        if depth > 15:
             self.reprobe_PV(board, minicache[bestmove])
 
         return (bestscore, minicache[bestmove])
