@@ -212,7 +212,7 @@ class ChessDB:
     def move_depth(self, bestscore, worstscore, score, depth):
         delta = score - bestscore if score is not None else worstscore - bestscore
         decay = delta // self.evalDecay if self.evalDecay != 0 else -100
-        return depth + decay - 1 if score is nont None else min(0, depth + decay - 1 - 1)
+        return depth + decay - 1 if score is not None else min(0, depth + decay - 1 - 1)
 
     def search(self, board, depth):
         if board.is_checkmate():
