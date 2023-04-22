@@ -33,17 +33,18 @@ options:
 Sample output:
 
 ```
-Search at depth  23
-  score     :  -89
-  PV        :  a5b7 a2a4 c8d7 e3c3 c7b6 a4b5 a6b5 a1a8 f8a8 b2b4 f6e8 d2b3 g8f8 c1d2 a8c8 c3c8 d7c8 c2d3 b7d8 b3a5 h7h6
-  queryall  :  3683
-  bf        :  1.43
-  inflight  :  6.64
-  chessdbq  :  1313
-  enqueued  :  291
-  date      :  2023-04-16T13:41:00.235615
-  total time:  416193
-  req. time :  316
+Search at depth  15
+  score     :  132
+  PV        :  d7d5 h2h3 h7h5 g4h5 e7e5 c2c3 d8h4 g1f3 h4h5 d2d3 g8e7 e2e4 b8c6 c1e3 f7f6 b1d2 c8e6 f1e2 h5f7 d1a4 e6d7 a4c2 e8c8 
+  queryall  :  6897
+  bf        :  1.80
+  inflight  :  13.20
+  chessdbq  :  1837
+  enqueued  :  0
+  date      :  2023-04-22T17:23:34.553357
+  total time:  88958
+  req. time :  48
+  URL       :  https://chessdb.cn/queryc_en/?rnbqkbnr/pppppppp/8/8/6P1/8/PPPPPP1P/RNBQKBNR_b_KQkq_-_moves_d7d5_h2h3_h7h5_g4h5_e7e5_c2c3_d8h4_g1f3_h4h5_d2d3_g8e7_e2e4_b8c6_c1e3_f7f6_b1d2_c8e6_f1e2_h5f7_d1a4_e6d7_a4c2_e8c8
 ```
 
 Meaning of the fields:
@@ -59,5 +60,6 @@ enqueued   : Number of positions that did not exist in the database but have bee
 date       : ... you guess it
 total time : Time spent in milliseconds since the start of the search
 req. time  : Average time needed to get a cdb list of moves for a position (including those that required enqueuing).
+URL        : link displaying the found PV in chessdb
 ```
 

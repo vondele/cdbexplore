@@ -407,5 +407,18 @@ if __name__ == "__main__":
             "  req. time : ",
             int(1000 * runtime / chessdb.count_uncached.get()),
         )
+
+        pvline = ""
+        local_board = chess.Board(epd)
+        for m in pv:
+            try:
+                move = chess.Move.from_uci(m)
+                local_board.push(move)
+                pvline += " " + m
+            except Exception:
+                pass
+        url = "https://chessdb.cn/queryc_en/?" + board.epd() + " moves" + pvline
+        print("  URL       : ", url.replace(" ", "_"))
+
         print("", flush=True)
         depth += 1
