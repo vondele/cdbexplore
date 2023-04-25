@@ -353,6 +353,12 @@ if __name__ == "__main__":
         default="rnbqkbnr/pppppppp/8/8/6P1/8/PPPPPP1P/RNBQKBNR b KQkq g3",
     )
     argParser.add_argument(
+        "--depthLimit",
+        help="finish the exploration at the specified depth",
+        type=int,
+        default=None,
+    )
+    argParser.add_argument(
         "--concurrency",
         help="concurrency of requests. This is the maximum number of requests made to chessdb at the same time.",
         type=int,
@@ -366,6 +372,7 @@ if __name__ == "__main__":
     )
     args = argParser.parse_args()
     epd = args.epd
+    depthLimit = args.depthLimit
 
     # limit stack size of created threads, many are created
     stackSize = 4096 * 64
@@ -383,7 +390,7 @@ if __name__ == "__main__":
     # set initial board
     board = chess.Board(epd)
     depth = 1
-    while True:
+    while depthLimit is None or depth <= depthLimit:
         bestscore, pv = chessdb.search(board, depth)
         pvline = ""
         for m in pv:
