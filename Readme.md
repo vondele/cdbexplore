@@ -16,7 +16,7 @@ Using some concurrency, fairly deep exploration is quickly possible
 This is a command line program. 
 
 ```
-usage: search.py [-h] [--epd EPD] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY]
+usage: cdbsearch.py [-h] [--epd EPD] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY]
 
 Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position (FEN/EPD)
 
@@ -65,3 +65,4 @@ req. time  : Average time needed to get a cdb list of moves for a position (incl
 URL        : link displaying the found PV in chessdb
 ```
 
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
