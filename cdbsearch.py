@@ -342,50 +342,18 @@ class ChessDB:
         return (bestscore, minicache[bestmove])
 
 
-if __name__ == "__main__":
-    argParser = argparse.ArgumentParser(
-        description="Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position (FEN/EPD)",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    argParser.add_argument(
-        "--epd",
-        help="epd to explore",
-        default="rnbqkbnr/pppppppp/8/8/6P1/8/PPPPPP1P/RNBQKBNR b KQkq g3",
-    )
-    argParser.add_argument(
-        "--depthLimit",
-        help="finish the exploration at the specified depth",
-        type=int,
-        default=None,
-    )
-    argParser.add_argument(
-        "--concurrency",
-        help="concurrency of requests. This is the maximum number of requests made to chessdb at the same time.",
-        type=int,
-        default=16,
-    )
-    argParser.add_argument(
-        "--evalDecay",
-        help="depth decrease per cp eval-to-best. A small number will use a very narrow search, 0 will essentially just follow PV lines. A wide search will likely enqueue many positions",
-        type=int,
-        default=2,
-    )
-    args = argParser.parse_args()
-    epd = args.epd
-    depthLimit = args.depthLimit
-
-    # limit stack size of created threads, many are created
-    stackSize = 4096 * 64
-    threading.stack_size(stackSize)
+def cdbsearch(epd, depthLimit, concurrency, evalDecay):
+    # on 32-bit systems, such as Raspberry Pi, it is prudent to adjust the
+    # thread stack size before calling this method, as seen in __main__ below
 
     # basic output
     print("Searched epd : ", epd)
-    print("evalDecay: ", args.evalDecay)
-    print("Concurrency  : ", args.concurrency)
+    print("evalDecay: ", evalDecay)
+    print("Concurrency  : ", concurrency)
     print("Starting date: ", datetime.now().isoformat())
 
     # create a ChessDB
-    chessdb = ChessDB(concurrency=args.concurrency, evalDecay=args.evalDecay)
+    chessdb = ChessDB(concurrency=concurrency, evalDecay=evalDecay)
 
     # set initial board
     board = chess.Board(epd)
@@ -429,3 +397,46 @@ if __name__ == "__main__":
 
         print("", flush=True)
         depth += 1
+
+
+if __name__ == "__main__":
+    argParser = argparse.ArgumentParser(
+        description="Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position (FEN/EPD)",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    argParser.add_argument(
+        "--epd",
+        help="epd to explore",
+        default="rnbqkbnr/pppppppp/8/8/6P1/8/PPPPPP1P/RNBQKBNR b KQkq g3",
+    )
+    argParser.add_argument(
+        "--depthLimit",
+        help="finish the exploration at the specified depth",
+        type=int,
+        default=None,
+    )
+    argParser.add_argument(
+        "--concurrency",
+        help="concurrency of requests. This is the maximum number of requests made to chessdb at the same time.",
+        type=int,
+        default=16,
+    )
+    argParser.add_argument(
+        "--evalDecay",
+        help="depth decrease per cp eval-to-best. A small number will use a very narrow search, 0 will essentially just follow PV lines. A wide search will likely enqueue many positions",
+        type=int,
+        default=2,
+    )
+    args = argParser.parse_args()
+
+    if sys.maxsize <= 2**32:
+        # on 32-bit systems we limit thread stack size, as many are created
+        stackSize = 4096 * 64
+        threading.stack_size(stackSize)
+
+    cdbsearch(
+        epd=args.epd,
+        depthLimit=args.depthLimit,
+        concurrency=args.concurrency,
+        evalDecay=args.evalDecay,
+    )
