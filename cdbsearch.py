@@ -1,16 +1,11 @@
-import queue
 import requests
 import time
 import copy
 import chess
-import argparse
-import functools
 import math
 import sys
 import threading
 import concurrent.futures
-import multiprocessing
-from urllib import parse
 from datetime import datetime
 
 
@@ -140,7 +135,7 @@ class ChessDB:
             else:
                 first = False
 
-            url = api + "?action=queryall&board=" + parse.quote(epd) + "&json=1"
+            url = api + f"?action=queryall&board={epd}&json=1"
             content = self.__apicall(url, timeout)
 
             if content is None:
@@ -157,7 +152,7 @@ class ChessDB:
                     enqueued = True
                     self.count_enqueued.inc()
 
-                url = api + "?action=queue&board=" + parse.quote(epd) + "&json=1"
+                url = api + f"?action=queue&board={epd}&json=1"
                 content = self.__apicall(url, timeout)
                 if content is None:
                     lasterror = "Something went wrong with queue"
@@ -355,8 +350,17 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay):
     # create a ChessDB
     chessdb = ChessDB(concurrency=concurrency, evalDecay=evalDecay)
 
-    # set initial board
+    # set initial board, including the moves provided within epd
+    if "moves" in epd:
+        epd, _, epdMoves = epd.partition(" moves")
+        epdMoves = epdMoves.split()
+    else:
+        epdMoves = []
+    epd = epd.strip()  # avoid leading and trailing spaces in URL below
     board = chess.Board(epd)
+    for m in epdMoves:
+        move = chess.Move.from_uci(m)
+        board.push(move)
     depth = 1
     while depthLimit is None or depth <= depthLimit:
         bestscore, pv = chessdb.search(board, depth)
@@ -385,14 +389,14 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay):
 
         pvline = ""
         local_board = chess.Board(epd)
-        for m in pv:
+        for m in epdMoves + pv:
             try:
                 move = chess.Move.from_uci(m)
                 local_board.push(move)
                 pvline += " " + m
             except Exception:
                 pass
-        url = "https://chessdb.cn/queryc_en/?" + board.epd() + " moves" + pvline
+        url = f"https://chessdb.cn/queryc_en/?{epd} moves{pvline}"
         print("  URL       : ", url.replace(" ", "_"))
 
         print("", flush=True)
@@ -400,14 +404,16 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay):
 
 
 if __name__ == "__main__":
+    import argparse
+
     argParser = argparse.ArgumentParser(
-        description="Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position (FEN/EPD)",
+        description="Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     argParser.add_argument(
         "--epd",
-        help="epd to explore",
-        default="rnbqkbnr/pppppppp/8/8/6P1/8/PPPPPP1P/RNBQKBNR b KQkq g3",
+        help="""EPD/FEN to explore: acceptable are FENs w/ and w/o move counters, as well as the extended "moves m1 m2 m3" syntax from cdb's API.""",
+        default="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - moves g2g4",
     )
     argParser.add_argument(
         "--depthLimit",
