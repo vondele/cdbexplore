@@ -410,10 +410,15 @@ if __name__ == "__main__":
         description="Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    argParser.add_argument(
+    group = argParser.add_mutually_exclusive_group()
+    group.add_argument(
         "--epd",
         help="""EPD/FEN to explore: acceptable are FENs w/ and w/o move counters, as well as the extended "moves m1 m2 m3" syntax from cdb's API.""",
         default="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - moves g2g4",
+    )
+    group.add_argument(
+        "--san",
+        help='Moves in SAN notation that lead to the position to be explored. E.g. "1. g4".',
     )
     argParser.add_argument(
         "--depthLimit",
@@ -440,8 +445,22 @@ if __name__ == "__main__":
         stackSize = 4096 * 64
         threading.stack_size(stackSize)
 
+    if args.san is not None:
+        import chess.pgn, io
+
+        if args.san:
+            pgn = io.StringIO(args.san)
+            game = chess.pgn.read_game(pgn)
+            epd = game.board().epd() + " moves"
+            for move in game.mainline_moves():
+                epd += f" {move}"
+        else:
+            epd = chess.STARTING_FEN  # passing empty string to --san gives startpos
+    else:
+        epd = args.epd
+
     cdbsearch(
-        epd=args.epd,
+        epd=epd,
         depthLimit=args.depthLimit,
         concurrency=args.concurrency,
         evalDecay=args.evalDecay,

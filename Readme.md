@@ -16,13 +16,14 @@ Using some concurrency, fairly deep exploration is quickly possible
 This is a command line program. 
 
 ```
-usage: cdbsearch.py [-h] [--epd EPD] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY]
+usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY]
 
 Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position.
 
 options:
   -h, --help            show this help message and exit
   --epd EPD             EPD/FEN to explore: acceptable are FENs w/ and w/o move counters, as well as the extended "moves m1 m2 m3" syntax from cdb's API. (default: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - moves g2g4)
+  --san SAN             Moves in SAN notation that lead to the position to be explored. E.g. "1. g4". (default: None)
   --depthLimit DEPTHLIMIT
                         finish the exploration at the specified depth (default: None)
   --concurrency CONCURRENCY
@@ -51,17 +52,17 @@ Search at depth  15
 Meaning of the fields:
 
 ```
-score      : The standard minimax score found, not using the decay that cdb implements
-PV         : Best line found
+score      : The standard minimax score found, not using the decay that cdb implements.
+PV         : Best line found.
 queryall   : Number of positions visited in the search tree, with results provided by cdb or the local cache.
-bf         : Branching factor computed from the last (i.e. queryall relative to depth)
-inflight   : Number of active/concurrent requests made to cdb on average
-chessdbq   : Number of positions requested to cdb
+bf         : Branching factor computed from the last (i.e. queryall relative to depth).
+inflight   : Number of active/concurrent requests made to cdb on average.
+chessdbq   : Number of positions requested to cdb.
 enqueued   : Number of positions that did not exist in the database but have been added as part of the search.
-date       : ... you guess it
-total time : Time spent in milliseconds since the start of the search
+date       : ... you guessed it
+total time : Time spent in milliseconds since the start of the search.
 req. time  : Average time needed to get a cdb list of moves for a position (including those that required enqueuing).
-URL        : link displaying the found PV in chessdb
+URL        : Link displaying the found PV in chessdb.
 ```
 
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
