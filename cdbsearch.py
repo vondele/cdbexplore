@@ -384,7 +384,10 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay):
             int(1000 * runtime / chessdb.count_uncached.get()),
         )
 
-        url = f"https://chessdb.cn/queryc_en/?{epd} moves " + " ".join(epdMoves + pv)
+        pvline = " ".join(
+            [m for m in epdMoves + pv if m != "draw" and m != "checkmate"]
+        )
+        url = f"https://chessdb.cn/queryc_en/?{epd} moves {pvline}"
         print("  URL       : ", url.replace(" ", "_"))
 
         print("", flush=True)
