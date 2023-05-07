@@ -158,6 +158,18 @@ class ChessDB:
                     lasterror = "Something went wrong with queue"
                     continue
 
+                # special case, position not available in cdb,
+                # e.g. in TB but with castling rights.
+                # score all moves as draw, and let search figure it out
+                if content == {}:
+                    found = True
+                    board = chess.Board(epd)
+                    for move in board.legal_moves:
+                        ucimove = move.uci()
+                        result[ucimove] = 0
+                    lasterror = "Position not queued"
+                    continue
+
                 lasterror = "Enqueued position"
                 continue
 
