@@ -364,13 +364,10 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay):
     depth = 1
     while depthLimit is None or depth <= depthLimit:
         bestscore, pv = chessdb.search(board, depth)
-        pvline = ""
-        for m in pv:
-            pvline += m + " "
         runtime = time.perf_counter() - chessdb.count_starttime
         print("Search at depth ", depth)
         print("  score     : ", bestscore)
-        print("  PV        : ", pvline)
+        print("  PV        : ", " ".join(pv))
         print("  queryall  : ", chessdb.count_queryall.get())
         print(
             f"  bf        :  { math.exp(math.log(chessdb.count_queryall.get())/depth) :.2f}"
@@ -387,16 +384,7 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay):
             int(1000 * runtime / chessdb.count_uncached.get()),
         )
 
-        pvline = ""
-        local_board = chess.Board(epd)
-        for m in epdMoves + pv:
-            try:
-                move = chess.Move.from_uci(m)
-                local_board.push(move)
-                pvline += " " + m
-            except Exception:
-                pass
-        url = f"https://chessdb.cn/queryc_en/?{epd} moves{pvline}"
+        url = f"https://chessdb.cn/queryc_en/?{epd} moves " + " ".join(epdMoves + pv)
         print("  URL       : ", url.replace(" ", "_"))
 
         print("", flush=True)
