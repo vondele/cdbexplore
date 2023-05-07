@@ -211,7 +211,7 @@ class ChessDB:
 
     def search(self, board, depth):
         if board.is_checkmate():
-            return (-40000, ["checkmate"])
+            return (-40000 + board.ply(), ["checkmate"])
 
         if (
             board.is_stalemate()
