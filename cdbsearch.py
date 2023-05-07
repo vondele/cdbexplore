@@ -1,16 +1,11 @@
-import queue
 import requests
 import time
 import copy
 import chess
-import argparse
-import functools
 import math
 import sys
 import threading
 import concurrent.futures
-import multiprocessing
-from urllib import parse
 from datetime import datetime
 
 
@@ -140,7 +135,7 @@ class ChessDB:
             else:
                 first = False
 
-            url = api + "?action=queryall&board=" + parse.quote(epd) + "&json=1"
+            url = api + f"?action=queryall&board={epd}&json=1"
             content = self.__apicall(url, timeout)
 
             if content is None:
@@ -157,7 +152,7 @@ class ChessDB:
                     enqueued = True
                     self.count_enqueued.inc()
 
-                url = api + "?action=queue&board=" + parse.quote(epd) + "&json=1"
+                url = api + f"?action=queue&board={epd}&json=1"
                 content = self.__apicall(url, timeout)
                 if content is None:
                     lasterror = "Something went wrong with queue"
@@ -355,18 +350,24 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay):
     # create a ChessDB
     chessdb = ChessDB(concurrency=concurrency, evalDecay=evalDecay)
 
-    # set initial board
+    # set initial board, including the moves provided within epd
+    if "moves" in epd:
+        epd, _, epdMoves = epd.partition(" moves")
+        epdMoves = epdMoves.split()
+    else:
+        epdMoves = []
+    epd = epd.strip()  # avoid leading and trailing spaces in URL below
     board = chess.Board(epd)
+    for m in epdMoves:
+        move = chess.Move.from_uci(m)
+        board.push(move)
     depth = 1
     while depthLimit is None or depth <= depthLimit:
         bestscore, pv = chessdb.search(board, depth)
-        pvline = ""
-        for m in pv:
-            pvline += m + " "
         runtime = time.perf_counter() - chessdb.count_starttime
         print("Search at depth ", depth)
         print("  score     : ", bestscore)
-        print("  PV        : ", pvline)
+        print("  PV        : ", " ".join(pv))
         print("  queryall  : ", chessdb.count_queryall.get())
         print(
             f"  bf        :  { math.exp(math.log(chessdb.count_queryall.get())/depth) :.2f}"
@@ -383,16 +384,10 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay):
             int(1000 * runtime / chessdb.count_uncached.get()),
         )
 
-        pvline = ""
-        local_board = chess.Board(epd)
-        for m in pv:
-            try:
-                move = chess.Move.from_uci(m)
-                local_board.push(move)
-                pvline += " " + m
-            except Exception:
-                pass
-        url = "https://chessdb.cn/queryc_en/?" + board.epd() + " moves" + pvline
+        pvline = " ".join(
+            [m for m in epdMoves + pv if m != "draw" and m != "checkmate"]
+        )
+        url = f"https://chessdb.cn/queryc_en/?{epd} moves {pvline}"
         print("  URL       : ", url.replace(" ", "_"))
 
         print("", flush=True)
@@ -400,14 +395,21 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay):
 
 
 if __name__ == "__main__":
+    import argparse
+
     argParser = argparse.ArgumentParser(
-        description="Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position (FEN/EPD)",
+        description="Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    argParser.add_argument(
+    group = argParser.add_mutually_exclusive_group()
+    group.add_argument(
         "--epd",
-        help="epd to explore",
-        default="rnbqkbnr/pppppppp/8/8/6P1/8/PPPPPP1P/RNBQKBNR b KQkq g3",
+        help="""EPD/FEN to explore: acceptable are FENs w/ and w/o move counters, as well as the extended "moves m1 m2 m3" syntax from cdb's API.""",
+        default="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - moves g2g4",
+    )
+    group.add_argument(
+        "--san",
+        help='Moves in SAN notation that lead to the position to be explored. E.g. "1. g4".',
     )
     argParser.add_argument(
         "--depthLimit",
@@ -434,8 +436,22 @@ if __name__ == "__main__":
         stackSize = 4096 * 64
         threading.stack_size(stackSize)
 
+    if args.san is not None:
+        import chess.pgn, io
+
+        if args.san:
+            pgn = io.StringIO(args.san)
+            game = chess.pgn.read_game(pgn)
+            epd = game.board().epd() + " moves"
+            for move in game.mainline_moves():
+                epd += f" {move}"
+        else:
+            epd = chess.STARTING_FEN  # passing empty string to --san gives startpos
+    else:
+        epd = args.epd
+
     cdbsearch(
-        epd=args.epd,
+        epd=epd,
         depthLimit=args.depthLimit,
         concurrency=args.concurrency,
         evalDecay=args.evalDecay,
