@@ -362,7 +362,10 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay):
         move = chess.Move.from_uci(m)
         board.push(move)
     depth = 1
-    while depthLimit is None or depth <= depthLimit:
+    bestscore = 0
+    # we stop the exploration once the prescribed depth is reached, or once bestscore indicates a proven win
+    # note that cdb stores mates and TB wins as 30000-ply, and cursed wins as 20000-ply
+    while (depthLimit is None or depth <= depthLimit) and abs(bestscore) <= 10000:
         bestscore, pv = chessdb.search(board, depth)
         runtime = time.perf_counter() - chessdb.count_starttime
         print("Search at depth ", depth)
