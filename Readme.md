@@ -55,7 +55,7 @@ Meaning of the fields:
 score      : The standard minimax score found, not using the decay that cdb implements.
 PV         : Best line found.
 queryall   : Number of positions visited in the search tree, with results provided by cdb or the local cache.
-bf         : Branching factor computed from queryall and depth.
+bf         : Branching factor q^(1/d) computed from queryall q and depth d.
 inflight   : Number of active/concurrent requests made to cdb on average.
 chessdbq   : Number of positions requested to cdb.
 enqueued   : Number of positions that did not exist in the database but have been added as part of the search.
