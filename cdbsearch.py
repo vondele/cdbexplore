@@ -2,7 +2,6 @@ import requests
 import time
 import copy
 import chess
-import math
 import sys
 import threading
 import concurrent.futures
@@ -381,9 +380,7 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay):
         print("  score     : ", bestscore)
         print("  PV        : ", " ".join(pv))
         print("  queryall  : ", chessdb.count_queryall.get())
-        print(
-            f"  bf        :  { math.exp(math.log(chessdb.count_queryall.get())/depth) :.2f}"
-        )
+        print(f"  bf        :  { chessdb.count_queryall.get()**(1/depth) :.2f}")
         print(
             f"  inflight  : { chessdb.count_sumInflightRequests.get() / chessdb.count_queryall.get() : .2f}"
         )
