@@ -402,6 +402,8 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay):
 
         print("", flush=True)
         depth += 1
+        if queryall == 0:  # this can only happen if initial board is checkmate or draw
+            break
 
 
 if __name__ == "__main__":
