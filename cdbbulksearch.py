@@ -1,6 +1,7 @@
 import argparse, sys
 import chess, chess.pgn
 import cdbsearch
+import concurrent.futures
 
 
 argParser = argparse.ArgumentParser(
@@ -21,6 +22,12 @@ argParser.add_argument(
     help="Argument passed to cdbsearch.",
     type=int,
     default=16,
+)
+argParser.add_argument(
+    "--bulkConcurrency",
+    help="Number of concurrent processes running cdbsearch",
+    type=int,
+    default=1,
 )
 argParser.add_argument(
     "--evalDecay",
@@ -71,21 +78,24 @@ while True:  # if args.forever is true, run indefinitely; o/w stop after one run
                         epd += epdMoves
                     metalist.append(epd)
         print(f"Read {len(metalist)} EPDs from file {args.filename}.")
-    for item in metalist:
-        if isPGN:
-            epd = item.board().epd()
-            if len(list(item.mainline_moves())):
-                epd += " moves"
-            for move in item.mainline_moves():
-                epd += f" {move}"
-        else:
-            epd = item
-        cdbsearch.cdbsearch(
-            epd=epd,
-            depthLimit=args.depthLimit,
-            concurrency=args.concurrency,
-            evalDecay=args.evalDecay,
-        )
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers=args.bulkConcurrency) as executor:
+        for item in metalist:
+            if isPGN:
+                epd = item.board().epd()
+                if len(list(item.mainline_moves())):
+                    epd += " moves"
+                for move in item.mainline_moves():
+                    epd += f" {move}"
+            else:
+                epd = item
+            executor.submit(
+                cdbsearch.cdbsearch,
+                epd=epd,
+                depthLimit=args.depthLimit,
+                concurrency=args.concurrency,
+                evalDecay=args.evalDecay,
+            )
     print(f"Done processing {args.filename}.")
     if not args.forever:
         break
