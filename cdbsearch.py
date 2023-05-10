@@ -191,6 +191,10 @@ class ChessDB:
             elif content["status"] == "checkmate" or content["status"] == "stalemate":
                 found = True
 
+            elif content["status"] == "invalid board":
+                result = {}
+                found = True
+
             else:
                 lasterror = "Surprise reply"
                 continue
@@ -235,6 +239,8 @@ class ChessDB:
         scored_db_moves = self.executorWork.submit(
             self.queryall, board.epd(), skipTT=False
         ).result()
+        if scored_db_moves == {}:
+            return (0, ["invalid"])
 
         # also force a query for high depth moves that do not have a full list of scored moves,
         # we use this to add newly scored moves to our TT
@@ -376,31 +382,37 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay):
     while depthLimit is None or depth <= depthLimit:
         bestscore, pv = chessdb.search(board, depth)
         runtime = time.perf_counter() - chessdb.count_starttime
+        queryall = chessdb.count_queryall.get()
         print("Search at depth ", depth)
         print("  score     : ", bestscore)
         print("  PV        : ", " ".join(pv))
-        print("  queryall  : ", chessdb.count_queryall.get())
-        print(f"  bf        :  { chessdb.count_queryall.get()**(1/depth) :.2f}")
-        print(
-            f"  inflight  : { chessdb.count_sumInflightRequests.get() / chessdb.count_queryall.get() : .2f}"
-        )
-        print("  chessdbq  : ", chessdb.count_uncached.get())
-        print("  enqueued  : ", chessdb.count_enqueued.get())
-        print("  date      : ", datetime.now().isoformat())
-        print("  total time: ", int(1000 * runtime))
-        print(
-            "  req. time : ",
-            int(1000 * runtime / chessdb.count_uncached.get()),
-        )
+        if queryall:
+            print("  queryall  : ", queryall)
+            print(f"  bf        :  { queryall**(1/depth) :.2f}")
+            print(
+                f"  inflight  : { chessdb.count_sumInflightRequests.get() / queryall : .2f}"
+            )
+            print("  chessdbq  : ", chessdb.count_uncached.get())
+            print("  enqueued  : ", chessdb.count_enqueued.get())
+            print("  date      : ", datetime.now().isoformat())
+            print("  total time: ", int(1000 * runtime))
+            print(
+                "  req. time : ",
+                int(1000 * runtime / chessdb.count_uncached.get()),
+            )
 
         pvline = " ".join(
-            [m for m in epdMoves + pv if m != "draw" and m != "checkmate"]
+            [m for m in epdMoves + pv if m not in ["checkmate", "draw", "invalid"]]
         )
-        url = f"https://chessdb.cn/queryc_en/?{epd} moves {pvline}"
+        if pvline:
+            pvline = " moves " + pvline
+        url = f"https://chessdb.cn/queryc_en/?{epd}{pvline}"
         print("  URL       : ", url.replace(" ", "_"))
 
         print("", flush=True)
         depth += 1
+        if pv in [["checkmate"], ["draw"], ["invalid"]]:  # nothing to be done
+            break
 
 
 if __name__ == "__main__":
