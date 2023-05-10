@@ -80,6 +80,8 @@ options:
                         Argument passed to cdbsearch. (default: 22)
   --concurrency CONCURRENCY
                         Argument passed to cdbsearch. (default: 16)
+  --bulkConcurrency BULKCONCURRENCY
+                        Number of concurrent processes running cdbsearch (default: 1)
   --evalDecay EVALDECAY
                         Argument passed to cdbsearch. (default: 2)
   --forever             Pass positions from filename to cdbsearch in an infinite loop. (default: False)
