@@ -1,19 +1,17 @@
 # Explore and extend the Chess Cloud Database 
 
-Explores and searches the largest online database (db) of chess positions and openings:
-
-[chessdb](https://chessdb.cn/queryc_en/)
+Explores and searches [chessdb.cn](https://chessdb.cn/queryc_en/), the largest online database (db) of chess positions and openings.
 
 ## Purpose
 
 Build a search tree from a particular position, using a mini-max like algorithm,
 finding the best line, extending the db as needed.
 
-Using some concurrency, fairly deep exploration is quickly possible
+Using some concurrency, fairly deep exploration is quickly possible.
 
-## Usage
+## `cdbsearch`
 
-This is a command line program. 
+This is a command line program to explore a single position.
 
 ```
 usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY]
@@ -63,6 +61,35 @@ date       : ... you guessed it
 total time : Time spent in milliseconds since the start of the search.
 req. time  : Average time needed to get a cdb list of moves for a position (including those that required enqueuing).
 URL        : Link displaying the found PV in chessdb.
+```
+
+## `cdbbulksearch`
+
+This is a command line program to sequentially explore several positions.
+```
+usage: cdbbulksearch.py [-h] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--forever] filename
+
+Sequentially call cdbsearch for EPDs or book exits stored in a file.
+
+positional arguments:
+  filename              PGN file if suffix is .pgn, o/w a text file with EPDs.
+
+options:
+  -h, --help            show this help message and exit
+  --depthLimit DEPTHLIMIT
+                        Argument passed to cdbsearch. (default: 22)
+  --concurrency CONCURRENCY
+                        Argument passed to cdbsearch. (default: 16)
+  --evalDecay EVALDECAY
+                        Argument passed to cdbsearch. (default: 2)
+  --forever             Pass positions from filename to cdbsearch in an infinite loop. (default: False)
+```
+
+Example:
+```shell
+echo '[Event "*"]\n\n1. g4 *\n\n1. g4 d5 *\n' > book.pgn
+git clone https://github.com/vondele/cdbexplore
+python3 cdbexplore/cdbbulksearch.py book.pgn --forever >& cdbsearch_book.log &
 ```
 
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
