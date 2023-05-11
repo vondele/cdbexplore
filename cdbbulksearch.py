@@ -1,9 +1,19 @@
+from io import StringIO
 import argparse, sys
 import chess, chess.pgn
 import cdbsearch
 import concurrent.futures
 import signal
 from multiprocessing import freeze_support, active_children
+
+
+def wrapcdbsearch(epd, depthLimit, concurrency, evalDecay):
+    sys.stdout = mystdout = StringIO()
+    cdbsearch.cdbsearch(
+        epd=epd, depthLimit=depthLimit, concurrency=concurrency, evalDecay=evalDecay
+    )
+    return mystdout.getvalue()
+
 
 if __name__ == "__main__":
     freeze_support()
@@ -108,6 +118,7 @@ if __name__ == "__main__":
         with concurrent.futures.ProcessPoolExecutor(
             max_workers=args.bulkConcurrency
         ) as executor:
+            fs = []
             for item in metalist:
                 if isPGN:
                     epd = item.board().epd()
@@ -117,13 +128,18 @@ if __name__ == "__main__":
                         epd += f" {move}"
                 else:
                     epd = item
-                executor.submit(
-                    cdbsearch.cdbsearch,
-                    epd=epd,
-                    depthLimit=args.depthLimit,
-                    concurrency=args.concurrency,
-                    evalDecay=args.evalDecay,
+                fs.append(
+                    executor.submit(
+                        wrapcdbsearch,
+                        epd=epd,
+                        depthLimit=args.depthLimit,
+                        concurrency=args.concurrency,
+                        evalDecay=args.evalDecay,
+                    )
                 )
+            for f in fs:
+                print(f.result())
+
         print(f"Done processing {args.filename}.")
         if not args.forever:
             break
