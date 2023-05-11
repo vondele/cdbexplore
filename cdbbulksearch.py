@@ -48,7 +48,7 @@ if __name__ == "__main__":
         "--bulkConcurrency",
         help="Number of concurrent processes running cdbsearch.",
         type=int,
-        default=1,
+        default=4,
     )
     argParser.add_argument(
         "--forever",
@@ -142,8 +142,13 @@ if __name__ == "__main__":
                         evalDecay=args.evalDecay,
                     )
                 )
-            print("Done scheduling.")
-            print("Next output once the first position has been computed.", flush=True)
+            print(
+                f"Scheduled {len(fs)} positions to be explored with concurrency {args.bulkConcurrency}."
+            )
+            print(
+                f"Next output once exploration of the first position has reached depth {args.depthLimit}.",
+                flush=True,
+            )
             for f in fs:
                 print(f.result(), flush=True)
 
