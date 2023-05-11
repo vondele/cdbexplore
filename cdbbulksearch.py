@@ -2,7 +2,8 @@ import argparse, sys
 import chess, chess.pgn
 import cdbsearch
 import concurrent.futures
-from multiprocessing import freeze_support
+import signal
+from multiprocessing import freeze_support, active_children
 
 if __name__ == "__main__":
     freeze_support()
@@ -48,6 +49,25 @@ if __name__ == "__main__":
         # on 32-bit systems we limit thread stack size, as many are created
         stackSize = 4096 * 64
         threading.stack_size(stackSize)
+
+    def on_sigint(signal, frame):
+        for child in active_children():
+            child.kill()
+        sys.exit(1)
+
+    # Install signal handlers.
+    signal.signal(signal.SIGINT, on_sigint)
+    signal.signal(signal.SIGTERM, on_sigint)
+    try:
+        signal.signal(signal.SIGQUIT, on_sigint)
+    except:
+        # Windows does not have SIGQUIT.
+        pass
+    try:
+        signal.signal(signal.SIGBREAK, on_sigint)
+    except:
+        # Linux does not have SIGBREAK.
+        pass
 
     isPGN = args.filename.endswith(".pgn")
     while True:  # if args.forever is true, run indefinitely; o/w stop after one run
