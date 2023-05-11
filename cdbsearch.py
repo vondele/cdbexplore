@@ -369,7 +369,7 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay):
 
     # set initial board, including the moves provided within epd
     if "moves" in epd:
-        epd, _, epdMoves = epd.partition(" moves")
+        epd, _, epdMoves = epd.partition("moves")
         epdMoves = epdMoves.split()
     else:
         epdMoves = []
@@ -426,7 +426,7 @@ if __name__ == "__main__":
     group.add_argument(
         "--epd",
         help="""EPD/FEN to explore: acceptable are FENs w/ and w/o move counters, as well as the extended "moves m1 m2 m3" syntax from cdb's API.""",
-        default="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - moves g2g4",
+        default=chess.STARTING_FEN[:-3] + "moves g2g4",
     )
     group.add_argument(
         "--san",
@@ -434,19 +434,19 @@ if __name__ == "__main__":
     )
     argParser.add_argument(
         "--depthLimit",
-        help="finish the exploration at the specified depth",
+        help="Finish the exploration at the specified depth.",
         type=int,
         default=None,
     )
     argParser.add_argument(
         "--concurrency",
-        help="concurrency of requests. This is the maximum number of requests made to chessdb at the same time.",
+        help="Concurrency of requests. This is the maximum number of requests made to chessdb at the same time.",
         type=int,
         default=16,
     )
     argParser.add_argument(
         "--evalDecay",
-        help="depth decrease per cp eval-to-best. A small number will use a very narrow search, 0 will essentially just follow PV lines. A wide search will likely enqueue many positions",
+        help="Depth decrease per cp eval-to-best. A small number will use a very narrow search, 0 will essentially just follow PV lines. A wide search will likely enqueue many positions.",
         type=int,
         default=2,
     )

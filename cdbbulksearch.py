@@ -24,16 +24,16 @@ argParser.add_argument(
     default=16,
 )
 argParser.add_argument(
-    "--bulkConcurrency",
-    help="Number of concurrent processes running cdbsearch",
-    type=int,
-    default=1,
-)
-argParser.add_argument(
     "--evalDecay",
     help="Argument passed to cdbsearch.",
     type=int,
     default=2,
+)
+argParser.add_argument(
+    "--bulkConcurrency",
+    help="Number of concurrent processes running cdbsearch.",
+    type=int,
+    default=1,
 )
 argParser.add_argument(
     "--forever",

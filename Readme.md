@@ -23,11 +23,11 @@ options:
   --epd EPD             EPD/FEN to explore: acceptable are FENs w/ and w/o move counters, as well as the extended "moves m1 m2 m3" syntax from cdb's API. (default: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - moves g2g4)
   --san SAN             Moves in SAN notation that lead to the position to be explored. E.g. "1. g4". (default: None)
   --depthLimit DEPTHLIMIT
-                        finish the exploration at the specified depth (default: None)
+                        Finish the exploration at the specified depth. (default: None)
   --concurrency CONCURRENCY
-                        concurrency of requests. This is the maximum number of requests made to chessdb at the same time. (default: 16)
+                        Concurrency of requests. This is the maximum number of requests made to chessdb at the same time. (default: 16)
   --evalDecay EVALDECAY
-                        depth decrease per cp eval-to-best. A small number will use a very narrow search, 0 will essentially just follow PV lines. A wide search will likely enqueue many positions (default: 2)
+                        Depth decrease per cp eval-to-best. A small number will use a very narrow search, 0 will essentially just follow PV lines. A wide search will likely enqueue many positions. (default: 2)
 ``` 
 
 Sample output:
@@ -66,8 +66,9 @@ URL        : Link displaying the found PV in chessdb.
 ## `cdbbulksearch`
 
 This is a command line program to sequentially explore several positions.
+
 ```
-usage: cdbbulksearch.py [-h] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--forever] filename
+usage: cdbbulksearch.py [-h] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--bulkConcurrency BULKCONCURRENCY] [--forever] filename
 
 Sequentially call cdbsearch for EPDs or book exits stored in a file.
 
@@ -80,10 +81,10 @@ options:
                         Argument passed to cdbsearch. (default: 22)
   --concurrency CONCURRENCY
                         Argument passed to cdbsearch. (default: 16)
-  --bulkConcurrency BULKCONCURRENCY
-                        Number of concurrent processes running cdbsearch (default: 1)
   --evalDecay EVALDECAY
                         Argument passed to cdbsearch. (default: 2)
+  --bulkConcurrency BULKCONCURRENCY
+                        Number of concurrent processes running cdbsearch. (default: 1)
   --forever             Pass positions from filename to cdbsearch in an infinite loop. (default: False)
 ```
 
