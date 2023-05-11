@@ -8,10 +8,12 @@ from multiprocessing import freeze_support, active_children
 
 
 def wrapcdbsearch(epd, depthLimit, concurrency, evalDecay):
+    old_stdout = sys.stdout
     sys.stdout = mystdout = StringIO()
     cdbsearch.cdbsearch(
         epd=epd, depthLimit=depthLimit, concurrency=concurrency, evalDecay=evalDecay
     )
+    sys.stdout = old_stdout
     return mystdout.getvalue()
 
 
@@ -138,7 +140,7 @@ if __name__ == "__main__":
                     )
                 )
             for f in fs:
-                print(f.result())
+                print(f.result(), flush=True)
 
         print(f"Done processing {args.filename}.")
         if not args.forever:
