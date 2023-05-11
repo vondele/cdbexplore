@@ -6,6 +6,7 @@ import sys
 import threading
 import concurrent.futures
 from datetime import datetime
+from multiprocessing import freeze_support
 
 
 class AtomicTT:
@@ -417,6 +418,7 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay):
 
 if __name__ == "__main__":
     import argparse
+    freeze_support()
 
     argParser = argparse.ArgumentParser(
         description="Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position.",
