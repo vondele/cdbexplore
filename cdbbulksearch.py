@@ -24,16 +24,16 @@ argParser.add_argument(
     default=16,
 )
 argParser.add_argument(
-    "--bulkConcurrency",
-    help="Number of concurrent processes running cdbsearch",
-    type=int,
-    default=1,
-)
-argParser.add_argument(
     "--evalDecay",
     help="Argument passed to cdbsearch.",
     type=int,
     default=2,
+)
+argParser.add_argument(
+    "--bulkConcurrency",
+    help="Number of concurrent processes running cdbsearch.",
+    type=int,
+    default=1,
 )
 argParser.add_argument(
     "--forever",
@@ -79,7 +79,9 @@ while True:  # if args.forever is true, run indefinitely; o/w stop after one run
                     metalist.append(epd)
         print(f"Read {len(metalist)} EPDs from file {args.filename}.")
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=args.bulkConcurrency) as executor:
+    with concurrent.futures.ProcessPoolExecutor(
+        max_workers=args.bulkConcurrency
+    ) as executor:
         for item in metalist:
             if isPGN:
                 epd = item.board().epd()
