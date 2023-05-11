@@ -63,8 +63,10 @@ if __name__ == "__main__":
         threading.stack_size(stackSize)
 
     def on_sigint(signal, frame):
+        print("Received signal to terminate. Killing sub-processes.", flush=True)
         for child in active_children():
             child.kill()
+        print("Done.", flush=True)
         sys.exit(1)
 
     # Install signal handlers.
