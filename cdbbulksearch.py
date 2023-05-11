@@ -30,7 +30,7 @@ if __name__ == "__main__":
         "--depthLimit",
         help="Argument passed to cdbsearch.",
         type=int,
-        default=22,
+        default=5,
     )
     argParser.add_argument(
         "--concurrency",
@@ -121,6 +121,7 @@ if __name__ == "__main__":
             max_workers=args.bulkConcurrency
         ) as executor:
             fs = []
+            print("Scheduling work ... ", flush=True)
             for item in metalist:
                 if isPGN:
                     epd = item.board().epd()
@@ -139,6 +140,8 @@ if __name__ == "__main__":
                         evalDecay=args.evalDecay,
                     )
                 )
+            print("Done scheduling.")
+            print("Next output once the first position has been computed.", flush=True)
             for f in fs:
                 print(f.result(), flush=True)
 

@@ -78,7 +78,7 @@ positional arguments:
 options:
   -h, --help            show this help message and exit
   --depthLimit DEPTHLIMIT
-                        Argument passed to cdbsearch. (default: 22)
+                        Argument passed to cdbsearch. (default: 5)
   --concurrency CONCURRENCY
                         Argument passed to cdbsearch. (default: 16)
   --evalDecay EVALDECAY
