@@ -418,6 +418,7 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay):
 
 if __name__ == "__main__":
     import argparse
+
     freeze_support()
 
     argParser = argparse.ArgumentParser(

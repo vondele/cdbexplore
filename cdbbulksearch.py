@@ -66,7 +66,9 @@ if __name__ == "__main__":
                         if line.startswith("#"):  # ignore comments
                             continue
                         epd, _, moves = line.partition("moves")
-                        epd = " ".join(epd.split()[:4])  # cdb ignores move counters anyway
+                        epd = " ".join(
+                            epd.split()[:4]
+                        )  # cdb ignores move counters anyway
                         epdMoves = " moves"
                         for m in moves.split():
                             if (
