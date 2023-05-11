@@ -91,7 +91,7 @@ options:
 Example:
 ```shell
 echo '[Event "*"]\n\n1. g4 *\n\n1. g4 d5 *\n' > book.pgn
-git clone https://github.com/vondele/cdbexplore
+git clone https://github.com/vondele/cdbexplore && pip install -r cdbexplore/requirements.txt
 python3 cdbexplore/cdbbulksearch.py book.pgn --forever >& cdbsearch_book.log &
 ```
 

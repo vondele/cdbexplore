@@ -68,9 +68,11 @@ while True:  # if args.forever is true, run indefinitely; o/w stop after one run
                     epdMoves = " moves"
                     for m in moves.split():
                         if (
-                            len(m) != 4
+                            len(m) < 4
+                            or len(m) > 5
                             or not {m[0], m[2]}.issubset(set("abcdefgh"))
                             or not {m[1], m[3]}.issubset(set("12345678"))
+                            or (len(m) == 5 and not m[4] in "qrbn")
                         ):
                             break
                         epdMoves += f" {m}"
