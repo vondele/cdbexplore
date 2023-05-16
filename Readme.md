@@ -28,6 +28,7 @@ options:
                         Concurrency of requests. This is the maximum number of requests made to chessdb at the same time. (default: 16)
   --evalDecay EVALDECAY
                         Depth decrease per cp eval-to-best. A small number will use a very narrow search, 0 will essentially just follow PV lines. A wide search will likely enqueue many positions. (default: 2)
+  --cursedWins          Treat cursed wins as wins. (default: False)
 ``` 
 
 Sample output:
@@ -83,6 +84,7 @@ options:
                         Argument passed to cdbsearch. (default: 16)
   --evalDecay EVALDECAY
                         Argument passed to cdbsearch. (default: 2)
+  --cursedWins          Argument passed to cdbsearch. (default: False)
   --bulkConcurrency BULKCONCURRENCY
                         Number of concurrent processes running cdbsearch. (default: 4)
   --forever             Pass positions from filename to cdbsearch in an infinite loop. (default: False)
