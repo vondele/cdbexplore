@@ -15,7 +15,7 @@ def wrapcdbsearch(epd, depthLimit, concurrency, evalDecay):
             epd=epd, depthLimit=depthLimit, concurrency=concurrency, evalDecay=evalDecay
         )
     except Exception as ex:
-        print(f" error: while searching {epd} caught exception {ex}")
+        print(f' error: while searching {epd} caught exception "{ex}"')
     sys.stdout = old_stdout
     return mystdout.getvalue()
 
@@ -160,7 +160,7 @@ if __name__ == "__main__":
                 try:
                     print(f.result(), flush=True)
                 except Exception as ex:
-                    print(f" error: caught exception {ex}")
+                    print(f' error: caught exception "{ex}"')
 
         print(f"Done processing {args.filename}.")
         if not args.forever:
