@@ -10,9 +10,12 @@ from multiprocessing import freeze_support, active_children
 def wrapcdbsearch(epd, depthLimit, concurrency, evalDecay):
     old_stdout = sys.stdout
     sys.stdout = mystdout = StringIO()
-    cdbsearch.cdbsearch(
-        epd=epd, depthLimit=depthLimit, concurrency=concurrency, evalDecay=evalDecay
-    )
+    try:
+        cdbsearch.cdbsearch(
+            epd=epd, depthLimit=depthLimit, concurrency=concurrency, evalDecay=evalDecay
+        )
+    except Exception as ex:
+        print(f" error: while searching {epd} caught exception {ex}")
     sys.stdout = old_stdout
     return mystdout.getvalue()
 
@@ -134,23 +137,30 @@ if __name__ == "__main__":
                 else:
                     epd = item
                 fs.append(
-                    executor.submit(
-                        wrapcdbsearch,
-                        epd=epd,
-                        depthLimit=args.depthLimit,
-                        concurrency=args.concurrency,
-                        evalDecay=args.evalDecay,
+                    (
+                        epd,
+                        executor.submit(
+                            wrapcdbsearch,
+                            epd=epd,
+                            depthLimit=args.depthLimit,
+                            concurrency=args.concurrency,
+                            evalDecay=args.evalDecay,
+                        ),
                     )
                 )
             print(
                 f"Scheduled {len(fs)} positions to be explored with concurrency {args.bulkConcurrency}."
             )
-            print(
-                f"Next output once exploration of the first position has reached depth {args.depthLimit}.",
-                flush=True,
-            )
-            for f in fs:
-                print(f.result(), flush=True)
+            for epd, f in fs:
+                print(
+                    "=" * 72
+                    + f'\nAwaiting results for exploration of EPD "{epd}" to depth {args.depthLimit} ... ',
+                    flush=True,
+                )
+                try:
+                    print(f.result(), flush=True)
+                except Exception as ex:
+                    print(f" error: caught exception {ex}")
 
         print(f"Done processing {args.filename}.")
         if not args.forever:
