@@ -7,12 +7,16 @@ import signal
 from multiprocessing import freeze_support, active_children
 
 
-def wrapcdbsearch(epd, depthLimit, concurrency, evalDecay):
+def wrapcdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
     old_stdout = sys.stdout
     sys.stdout = mystdout = StringIO()
     try:
         cdbsearch.cdbsearch(
-            epd=epd, depthLimit=depthLimit, concurrency=concurrency, evalDecay=evalDecay
+            epd=epd,
+            depthLimit=depthLimit,
+            concurrency=concurrency,
+            evalDecay=evalDecay,
+            cursedWins=cursedWins,
         )
     except Exception as ex:
         print(f' error: while searching {epd} caught exception "{ex}"')
@@ -46,6 +50,11 @@ if __name__ == "__main__":
         help="Argument passed to cdbsearch.",
         type=int,
         default=2,
+    )
+    argParser.add_argument(
+        "--cursedWins",
+        action="store_true",
+        help="Argument passed to cdbsearch.",
     )
     argParser.add_argument(
         "--bulkConcurrency",
@@ -145,6 +154,7 @@ if __name__ == "__main__":
                             depthLimit=args.depthLimit,
                             concurrency=args.concurrency,
                             evalDecay=args.evalDecay,
+                            cursedWins=args.cursedWins,
                         ),
                     )
                 )

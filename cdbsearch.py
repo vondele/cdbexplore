@@ -49,10 +49,11 @@ class AtomicInteger:
 
 
 class ChessDB:
-    def __init__(self, concurrency, evalDecay):
+    def __init__(self, concurrency, evalDecay, cursedWins=False):
         # user defined parameters
         self.concurrency = concurrency
         self.evalDecay = evalDecay
+        self.cursedWins = cursedWins
 
         # some counters that will be accessed by multiple threads
         self.count_queryall = AtomicInteger(0)
@@ -184,7 +185,11 @@ class ChessDB:
                 found = True
                 if "moves" in content:
                     for m in content["moves"]:
-                        result[m["uci"]] = m["score"]
+                        s = m["score"]
+                        if not self.cursedWins and 15000 <= abs(s) and abs(s) <= 20000:
+                            # cursed wins are TB mates that run afoul of 50mr
+                            s = 0
+                        result[m["uci"]] = s
                 else:
                     lasterror = "Unexpectedly missing moves"
                     continue
@@ -355,7 +360,7 @@ class ChessDB:
         return (bestscore, minicache[bestmove])
 
 
-def cdbsearch(epd, depthLimit, concurrency, evalDecay):
+def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
     # on 32-bit systems, such as Raspberry Pi, it is prudent to adjust the
     # thread stack size before calling this method, as seen in __main__ below
 
@@ -366,7 +371,9 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay):
     print("Starting date: ", datetime.now().isoformat())
 
     # create a ChessDB
-    chessdb = ChessDB(concurrency=concurrency, evalDecay=evalDecay)
+    chessdb = ChessDB(
+        concurrency=concurrency, evalDecay=evalDecay, cursedWins=cursedWins
+    )
 
     # set initial board, including the moves provided within epd
     if "moves" in epd:
@@ -453,6 +460,11 @@ if __name__ == "__main__":
         type=int,
         default=2,
     )
+    argParser.add_argument(
+        "--cursedWins",
+        action="store_true",
+        help="Treat cursed wins as wins.",
+    )
     args = argParser.parse_args()
 
     if sys.maxsize <= 2**32:
@@ -479,4 +491,5 @@ if __name__ == "__main__":
         depthLimit=args.depthLimit,
         concurrency=args.concurrency,
         evalDecay=args.evalDecay,
+        cursedWins=args.cursedWins,
     )
