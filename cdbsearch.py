@@ -178,20 +178,23 @@ class ChessDB:
                 # special case, request to clear the limit
                 url = api + "?action=clearlimit"
                 self.__apicall(url, timeout)
-                lasterror = "asked to clearlimit"
+                lasterror = "Asked to clearlimit"
                 continue
 
             elif content["status"] == "ok":
                 found = True
-                if "moves" in content:
+                try:
                     for m in content["moves"]:
                         s = m["score"]
                         if not self.cursedWins and 15000 <= abs(s) and abs(s) <= 20000:
                             # cursed wins are TB mates that run afoul of 50mr
                             s = 0
                         result[m["uci"]] = s
-                else:
-                    lasterror = "Unexpectedly missing moves"
+                except:
+                    # we do not trust possibly partial move information received
+                    found = False
+                    result = {"depth": 0}
+                    lasterror = "Unexpected or malformed json reply"
                     continue
 
             elif content["status"] == "checkmate" or content["status"] == "stalemate":
