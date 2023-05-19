@@ -238,8 +238,10 @@ class ChessDB:
         return depth + decay - 1 if score is not None else min(0, depth + decay - 1 - 1)
 
     def search(self, board, depth):
+        # ply stores how many plies we are away from rootBoard
+        ply = len(board.move_stack) - len(self.rootBoard.move_stack)
         if board.is_checkmate():
-            return (-40000 + board.ply(), ["checkmate"])
+            return (-40000 + ply, ["checkmate"])
 
         if (
             board.is_stalemate()
@@ -281,7 +283,6 @@ class ChessDB:
             if s < worstscore:
                 worstscore = s
 
-        ply = len(board.move_stack) - len(self.rootBoard.move_stack)
         # guarantee sufficient depth of the executorTree list
         while len(self.executorTree) < ply + 1:
             self.executorTree.append(
