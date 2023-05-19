@@ -1,6 +1,5 @@
 import requests
 import time
-import copy
 import chess
 import sys
 import threading
@@ -213,7 +212,7 @@ class ChessDB:
 
     # query all positions along the PV back to the root
     def reprobe_PV(self, board, PV):
-        local_board = copy.deepcopy(board)
+        local_board = board.copy()
         for ucimove in PV:
             try:
                 move = chess.Move.from_uci(ucimove)
@@ -311,7 +310,7 @@ class ChessDB:
             if newdepth >= 0 and not tried_unscored:
                 board.push(move)
                 futures[ucimove] = self.executorTree[ply].submit(
-                    self.search, copy.deepcopy(board), newdepth
+                    self.search, board.copy(), newdepth
                 )
                 board.pop()
                 tried_unscored = True if score is None else tried_unscored
