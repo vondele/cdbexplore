@@ -228,11 +228,14 @@ class ChessDB:
                 break
 
     def move_depth(self, bestscore, worstscore, score, depth):
+        # returns depth - 1 for bestmove and negative values for bad moves, terminating their search
+        # unknown moves are treated worse than worstmove, returning at most 0
         delta = score - bestscore if score is not None else worstscore - bestscore
         decay = delta // self.evalDecay if self.evalDecay != 0 else -100
         return depth + decay - 1 if score is not None else min(0, depth + decay - 2)
 
     def search(self, board, depth):
+        # returns (bestscore, pv) for current position stored in board
         if board.is_checkmate():
             return (-40000 + board.ply(), ["checkmate"])
 
@@ -282,8 +285,6 @@ class ChessDB:
                 concurrent.futures.ThreadPoolExecutor(max_workers=self.concurrency)
             )
 
-        newly_scored_moves = {"depth": depth}
-
         moves_to_search = 0
         for move in board.legal_moves:
             ucimove = move.uci()
@@ -292,7 +293,8 @@ class ChessDB:
             if newdepth >= 0:
                 moves_to_search += 1
 
-        minicache = {}
+        newly_scored_moves = {"depth": depth}
+        minicache = {}  # store candidate PVs for all known moves
         futures = {}
         tried_unscored = False
 
@@ -305,6 +307,7 @@ class ChessDB:
             if moves_to_search == 1 and bestscore == score and depth > 4:
                 newdepth += 1
 
+            # schedule qualifying moves for deeper searches, stopping once an unknown move was scheduled
             if newdepth >= 0 and not tried_unscored:
                 board.push(move)
                 futures[ucimove] = self.executorTree[ply].submit(
@@ -317,10 +320,10 @@ class ChessDB:
                 minicache[ucimove] = [ucimove]
 
         # get the results from the futures
-        for ucimove in futures:
-            s, pv = futures[ucimove].result()
-            minicache[ucimove] = [ucimove] + pv
+        for ucimove, search in futures.items():
+            s, pv = search.result()
             newly_scored_moves[ucimove] = -s
+            minicache[ucimove] = [ucimove] + pv
 
         # add potentially newly scored moves, or moves we have not explored by search
         if skipTT_db_moves:
@@ -341,9 +344,8 @@ class ChessDB:
         # store our computed result
         self.TT.set(board.epd(), newly_scored_moves)
 
+        # find bestmove and associated PV
         bestscore = -40001
-        bestmove = None
-
         for m, s in newly_scored_moves.items():
             if m == "depth":
                 continue
