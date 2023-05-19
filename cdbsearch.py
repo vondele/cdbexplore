@@ -279,7 +279,7 @@ class ChessDB:
             if s < worstscore:
                 worstscore = s
 
-        # guarantee sufficient depth of the executorTree list
+        # guarantee sufficient length of the executorTree list
         while len(self.executorTree) < ply + 1:
             self.executorTree.append(
                 concurrent.futures.ThreadPoolExecutor(max_workers=self.concurrency)
