@@ -49,11 +49,16 @@ class AtomicInteger:
 
 
 class ChessDB:
-    def __init__(self, concurrency, evalDecay, cursedWins=False):
+    def __init__(
+        self, concurrency, evalDecay, cursedWins=False, rootBoard=chess.Board()
+    ):
         # user defined parameters
         self.concurrency = concurrency
         self.evalDecay = evalDecay
         self.cursedWins = cursedWins
+
+        # the root position under which the tree will be built
+        self.rootBoard = rootBoard
 
         # some counters that will be accessed by multiple threads
         self.count_queryall = AtomicInteger(0)
@@ -73,10 +78,9 @@ class ChessDB:
 
         # At each level in the tree we need a few threads.
         # Evaluations can happen at any level, so we can saturate the work executor nevertheless
+        # For the root position two threads are probably enough.
         self.executorTree = [
-            concurrent.futures.ThreadPoolExecutor(
-                max_workers=max(2, self.concurrency // 4)
-            )
+            concurrent.futures.ThreadPoolExecutor(max_workers=min(2, self.concurrency))
         ]
         self.executorWork = concurrent.futures.ThreadPoolExecutor(
             max_workers=self.concurrency
@@ -277,8 +281,8 @@ class ChessDB:
             if s < worstscore:
                 worstscore = s
 
+        ply = len(board.move_stack) - len(self.rootBoard.move_stack)
         # guarantee sufficient depth of the executorTree list
-        ply = board.ply()
         while len(self.executorTree) < ply + 1:
             self.executorTree.append(
                 concurrent.futures.ThreadPoolExecutor(max_workers=self.concurrency)
@@ -373,11 +377,6 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
     print("Concurrency  : ", concurrency)
     print("Starting date: ", datetime.now().isoformat())
 
-    # create a ChessDB
-    chessdb = ChessDB(
-        concurrency=concurrency, evalDecay=evalDecay, cursedWins=cursedWins
-    )
-
     # set initial board, including the moves provided within epd
     if "moves" in epd:
         epd, _, epdMoves = epd.partition("moves")
@@ -389,6 +388,15 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
     for m in epdMoves:
         move = chess.Move.from_uci(m)
         board.push(move)
+
+    # create a ChessDB
+    chessdb = ChessDB(
+        concurrency=concurrency,
+        evalDecay=evalDecay,
+        cursedWins=cursedWins,
+        rootBoard=board.copy(),
+    )
+
     depth = 1
     while depthLimit is None or depth <= depthLimit:
         bestscore, pv = chessdb.search(board, depth)
