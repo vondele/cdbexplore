@@ -4,7 +4,7 @@ import chess
 import sys
 import threading
 import concurrent.futures
-from datetime import datetime
+from datetime import datetime, timedelta
 from multiprocessing import freeze_support
 
 
@@ -55,11 +55,11 @@ class ChessDB:
         self.cursedWins = cursedWins
 
         # some counters that will be accessed by multiple threads
-        self.count_queryall = AtomicInteger(0)
-        self.count_uncached = AtomicInteger(0)
-        self.count_enqueued = AtomicInteger(0)
-        self.count_inflightRequests = AtomicInteger(0)
-        self.count_sumInflightRequests = AtomicInteger(0)
+        self.count_queryall = AtomicInteger()
+        self.count_uncached = AtomicInteger()
+        self.count_enqueued = AtomicInteger()
+        self.count_inflightRequests = AtomicInteger()
+        self.count_sumInflightRequests = AtomicInteger()
 
         # for timing output
         self.count_starttime = time.perf_counter()
@@ -196,7 +196,7 @@ class ChessDB:
                     lasterror = "Unexpected or malformed json reply"
                     continue
 
-            elif content["status"] == "checkmate" or content["status"] == "stalemate":
+            elif content["status"] in ["checkmate", "stalemate"]:
                 found = True
 
             elif content["status"] == "invalid board":
@@ -230,7 +230,7 @@ class ChessDB:
     def move_depth(self, bestscore, worstscore, score, depth):
         delta = score - bestscore if score is not None else worstscore - bestscore
         decay = delta // self.evalDecay if self.evalDecay != 0 else -100
-        return depth + decay - 1 if score is not None else min(0, depth + decay - 1 - 1)
+        return depth + decay - 1 if score is not None else min(0, depth + decay - 2)
 
     def search(self, board, depth):
         if board.is_checkmate():
@@ -266,10 +266,9 @@ class ChessDB:
         bestmove = None
         worstscore = +40001
 
-        for m in scored_db_moves:
+        for m, s in scored_db_moves.items():
             if m == "depth":
                 continue
-            s = scored_db_moves[m]
             if s > bestscore:
                 bestscore = s
                 bestmove = m
@@ -285,13 +284,12 @@ class ChessDB:
 
         newly_scored_moves = {"depth": depth}
 
-        tried_unscored = False
         moves_to_search = 0
         for move in board.legal_moves:
             ucimove = move.uci()
             score = scored_db_moves.get(ucimove, None)
             newdepth = self.move_depth(bestscore, worstscore, score, depth)
-            if newdepth >= 0 and not tried_unscored:
+            if newdepth >= 0:
                 moves_to_search += 1
 
         minicache = {}
@@ -346,10 +344,9 @@ class ChessDB:
         bestscore = -40001
         bestmove = None
 
-        for m in newly_scored_moves:
+        for m, s in newly_scored_moves.items():
             if m == "depth":
                 continue
-            s = newly_scored_moves[m]
             if s > bestscore or (
                 s == bestscore and len(minicache[m]) > len(minicache[bestmove])
             ):
@@ -405,7 +402,9 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
             print("  chessdbq  : ", chessdb.count_uncached.get())
             print("  enqueued  : ", chessdb.count_enqueued.get())
             print("  date      : ", datetime.now().isoformat())
-            print("  total time: ", int(1000 * runtime))
+            print(
+                "  total time: ", str(timedelta(seconds=int(100 * runtime) / 100))[:-4]
+            )
             print(
                 "  req. time : ",
                 int(1000 * runtime / chessdb.count_uncached.get()),
