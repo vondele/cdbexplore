@@ -75,12 +75,9 @@ class ChessDB:
         # our dictionary to cache intermediate results
         self.TT = AtomicTT()
 
-        # At each level in the tree we need a few threads.
-        # Evaluations can happen at any level, so we can saturate the work executor nevertheless
-        # For the root position two threads are probably enough.
-        self.executorTree = [
-            concurrent.futures.ThreadPoolExecutor(max_workers=min(2, self.concurrency))
-        ]
+        # list of ThreadPoolExecutors, one for each level
+        self.executorTree = []
+
         self.executorWork = concurrent.futures.ThreadPoolExecutor(
             max_workers=self.concurrency
         )
