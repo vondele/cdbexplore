@@ -59,8 +59,8 @@ inflight   : Number of active/concurrent requests made to cdb on average.
 chessdbq   : Number of positions requested to cdb.
 enqueued   : Number of positions that did not exist in the database but have been added as part of the search.
 date       : ... you guessed it
-total time : Time spent in milliseconds since the start of the search.
-req. time  : Average time needed to get a cdb list of moves for a position (including those that required enqueuing).
+total time : Time spent since the start of the search.
+req. time  : Average time (in milliseconds) needed to get a cdb list of moves for a position (including those that required enqueuing).
 URL        : Link displaying the found PV in chessdb.
 ```
 
