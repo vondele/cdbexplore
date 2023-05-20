@@ -34,19 +34,19 @@ options:
 Sample output:
 
 ```
-Search at depth  11
-  score     :  131
-  PV        :  d7d5 e2e3 b8c6 b1c3 e7e5 d2d4 c8e6 d4e5 c6e5 h2h3 h7h5 g1f3
-  queryall  :  23791
-  bf        :  2.50
-  inflight  :  13.01
-  chessdbq  :  9805
-  enqueued  :  75
-  unscored  :  88
-  date      :  2023-05-20T14:15:27.826349
-  total time:  0:05:52.63
-  req. time :  35
-  URL       :  https://chessdb.cn/queryc_en/?rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR_w_KQkq_-_moves_g2g4_d7d5_e2e3_b8c6_b1c3_e7e5_d2d4_c8e6_d4e5_c6e5_h2h3_h7h5_g1f3
+Search at depth  13
+  score     :  126
+  PV        :  d7d5 e2e3 b8c6 d2d4 e7e5 b1c3 c8e6 d4e5 c6e5 h2h3 h7h5 g1f3 e5f3 d1f3 h5g4
+  queryall  :  24745
+  bf        :  2.18
+  inflight  :  12.55
+  chessdbq  :  6733
+  enqueued  :  5
+  unscored  :  2
+  date      :  2023-05-20T19:31:50.668334
+  total time:  0:02:55.59
+  req. time :  26
+  URL       :  https://chessdb.cn/queryc_en/?rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR_w_KQkq_-_moves_g2g4_d7d5_e2e3_b8c6_d2d4_e7e5_b1c3_c8e6_d4e5_c6e5_h2h3_h7h5_g1f3_e5f3_d1f3_h5g4
 ```
 
 Meaning of the fields:
