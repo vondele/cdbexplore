@@ -52,6 +52,12 @@ if __name__ == "__main__":
         default=2,
     )
     argParser.add_argument(
+        "--optimism",
+        help="Argument passed to cdbsearch.",
+        type=int,
+        default=1,
+    )
+    argParser.add_argument(
         "--cursedWins",
         action="store_true",
         help="Argument passed to cdbsearch.",
@@ -154,6 +160,7 @@ if __name__ == "__main__":
                             depthLimit=args.depthLimit,
                             concurrency=args.concurrency,
                             evalDecay=args.evalDecay,
+                            optimism=args.optimism,
                             cursedWins=args.cursedWins,
                         ),
                     )

@@ -14,7 +14,7 @@ Using some concurrency, fairly deep exploration is quickly possible.
 This is a command line program to explore a single position.
 
 ```
-usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY]
+usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--optimism OPTIMISM] [--cursedWins]
 
 Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position.
 
@@ -28,6 +28,7 @@ options:
                         Concurrency of requests. This is the maximum number of requests made to chessdb at the same time. (default: 16)
   --evalDecay EVALDECAY
                         Depth decrease per cp eval-to-best. A small number will use a very narrow search, 0 will essentially just follow PV lines. A wide search will likely enqueue many positions. (default: 2)
+  --optimism OPTIMISM   Optimism regarding unscored moves: 0 will not search any, 1 only if the worst move is also searched, 2 only if a move half as bad as the worst move is also searched, and so on. (default: 1)
   --cursedWins          Treat cursed wins as wins. (default: False)
 ``` 
 
@@ -69,7 +70,7 @@ URL        : Link displaying the found PV in chessdb.
 This is a command line program to sequentially explore several positions.
 
 ```
-usage: cdbbulksearch.py [-h] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--bulkConcurrency BULKCONCURRENCY] [--forever] filename
+usage: cdbbulksearch.py [-h] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--optimism OPTIMISM] [--cursedWins] [--bulkConcurrency BULKCONCURRENCY] [--forever] filename
 
 Sequentially call cdbsearch for EPDs or book exits stored in a file.
 
@@ -84,6 +85,7 @@ options:
                         Argument passed to cdbsearch. (default: 16)
   --evalDecay EVALDECAY
                         Argument passed to cdbsearch. (default: 2)
+  --optimism OPTIMISM   Argument passed to cdbsearch. (default: 1)
   --cursedWins          Argument passed to cdbsearch. (default: False)
   --bulkConcurrency BULKCONCURRENCY
                         Number of concurrent processes running cdbsearch. (default: 4)

@@ -49,11 +49,17 @@ class AtomicInteger:
 
 class ChessDB:
     def __init__(
-        self, concurrency, evalDecay, cursedWins=False, rootBoard=chess.Board()
+        self,
+        concurrency,
+        evalDecay,
+        optimism,
+        cursedWins=False,
+        rootBoard=chess.Board(),
     ):
         # user defined parameters
         self.concurrency = concurrency
         self.evalDecay = evalDecay
+        self.optimism = optimism
         self.cursedWins = cursedWins
 
         # the root position under which the tree will be built
@@ -230,10 +236,19 @@ class ChessDB:
 
     def move_depth(self, bestscore, worstscore, score, depth):
         # returns depth - 1 for bestmove and negative values for bad moves, terminating their search
-        # unknown moves are treated worse than worstmove, returning at most 0
-        delta = score - bestscore if score is not None else worstscore - bestscore
+        # for unscored moves we return at most 0
+        if score is None:
+            # optimism says how confident we are that unscored moves are good
+            delta = (
+                (worstscore - bestscore) // self.optimism
+                if self.optimism != 0
+                else -(10**6)
+            )
+        else:
+            delta = score - bestscore
         decay = delta // self.evalDecay if self.evalDecay != 0 else 10**6 * delta
-        return depth + decay - 1 if score is not None else min(0, depth + decay - 2)
+        moveDepth = depth + decay - 1
+        return moveDepth if score is not None else min(0, moveDepth)
 
     def search(self, board, depth):
         # returns (bestscore, pv) for current position stored in board
@@ -365,17 +380,19 @@ class ChessDB:
         return (bestscore, minicache[bestmove])
 
 
-def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
+def cdbsearch(epd, depthLimit, concurrency, evalDecay, optimism, cursedWins=False):
     # on 32-bit systems, such as Raspberry Pi, it is prudent to adjust the
     # thread stack size before calling this method, as seen in __main__ below
 
     concurrency = max(1, concurrency)
     evalDecay = max(0, evalDecay)
+    optimism = max(0, optimism)
 
     # basic output
     print("Searched epd : ", epd)
-    print("evalDecay: ", evalDecay)
     print("Concurrency  : ", concurrency)
+    print("evalDecay    : ", evalDecay)
+    print("Optimism     : ", optimism)
     print("Starting date: ", datetime.now().isoformat())
 
     # set initial board, including the moves provided within epd
@@ -394,6 +411,7 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
     chessdb = ChessDB(
         concurrency=concurrency,
         evalDecay=evalDecay,
+        optimism=optimism,
         cursedWins=cursedWins,
         rootBoard=board.copy(),
     )
@@ -475,6 +493,12 @@ if __name__ == "__main__":
         default=2,
     )
     argParser.add_argument(
+        "--optimism",
+        help="Optimism regarding unscored moves: 0 will not search any, 1 only if the worst move is also searched, 2 only if a move half as bad as the worst move is also searched, and so on.",
+        type=int,
+        default=1,
+    )
+    argParser.add_argument(
         "--cursedWins",
         action="store_true",
         help="Treat cursed wins as wins.",
@@ -505,5 +529,6 @@ if __name__ == "__main__":
         depthLimit=args.depthLimit,
         concurrency=args.concurrency,
         evalDecay=args.evalDecay,
+        optimism=args.optimism,
         cursedWins=args.cursedWins,
     )
