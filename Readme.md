@@ -34,18 +34,19 @@ options:
 Sample output:
 
 ```
-Search at depth  15
-  score     :  124
-  PV        :  d7d5 h2h3 h7h5 g4h5 e7e5 c2c3 h8h5 d2d4 b8c6 d4e5 c6e5 c1f4 e5g6 f4h2 f8d6 b1d2 d6h2 h1h2 g8f6 e2e3 d8d6 h2g2 e8f8 g2g3 a7a5 f1e2 h5e5
-  queryall  :  5357
-  bf        :  1.77
-  inflight  :  11.44
-  chessdbq  :  1463
-  enqueued  :  0
-  date      :  2023-05-06T21:37:31.630978
-  total time:  60905
-  req. time :  41
-  URL       :  https://chessdb.cn/queryc_en/?rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR_w_KQkq_-_moves_g2g4_d7d5_h2h3_h7h5_g4h5_e7e5_c2c3_h8h5_d2d4_b8c6_d4e5_c6e5_c1f4_e5g6_f4h2_f8d6_b1d2_d6h2_h1h2_g8f6_e2e3_d8d6_h2g2_e8f8_g2g3_a7a5_f1e2_h5e5
+Search at depth  11
+  score     :  131
+  PV        :  d7d5 e2e3 b8c6 b1c3 e7e5 d2d4 c8e6 d4e5 c6e5 h2h3 h7h5 g1f3
+  queryall  :  23791
+  bf        :  2.50
+  inflight  :  13.01
+  chessdbq  :  9805
+  enqueued  :  75
+  unscored  :  88
+  date      :  2023-05-20T14:15:27.826349
+  total time:  0:05:52.63
+  req. time :  35
+  URL       :  https://chessdb.cn/queryc_en/?rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR_w_KQkq_-_moves_g2g4_d7d5_e2e3_b8c6_b1c3_e7e5_d2d4_c8e6_d4e5_c6e5_h2h3_h7h5_g1f3
 ```
 
 Meaning of the fields:
@@ -57,7 +58,8 @@ queryall   : Number of positions visited in the search tree, with results provid
 bf         : Branching factor q^(1/d) computed from queryall q and depth d.
 inflight   : Number of active/concurrent requests made to cdb on average.
 chessdbq   : Number of positions requested to cdb.
-enqueued   : Number of positions that did not exist in the database but have been added as part of the search.
+enqueued   : Number of positions that did not exist within cdb but have been added as part of the search.
+unscored   : Number of existing unscored moves within cdb that were assigned a score as part of the search.
 date       : ... you guessed it
 total time : Time spent since the start of the search.
 req. time  : Average time (in milliseconds) needed to get a cdb list of moves for a position (including those that required enqueuing).
