@@ -232,7 +232,7 @@ class ChessDB:
         # returns depth - 1 for bestmove and negative values for bad moves, terminating their search
         # unknown moves are treated worse than worstmove, returning at most 0
         delta = score - bestscore if score is not None else worstscore - bestscore
-        decay = delta // self.evalDecay if self.evalDecay != 0 else -100
+        decay = delta // self.evalDecay if self.evalDecay != 0 else 10**6 * delta
         return depth + decay - 1 if score is not None else min(0, depth + decay - 2)
 
     def search(self, board, depth):
@@ -368,6 +368,9 @@ class ChessDB:
 def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
     # on 32-bit systems, such as Raspberry Pi, it is prudent to adjust the
     # thread stack size before calling this method, as seen in __main__ below
+
+    concurrency = max(1, concurrency)
+    evalDecay = max(0, evalDecay)
 
     # basic output
     print("Searched epd : ", epd)
