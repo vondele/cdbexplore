@@ -291,20 +291,17 @@ class ChessDB:
             )
 
         moves_to_search = 0
-        unscored_to_search = 0
         for move in board.legal_moves:
             ucimove = move.uci()
             score = scored_db_moves.get(ucimove, None)
             newdepth = self.move_depth(bestscore, worstscore, score, depth)
             if newdepth >= 0:
                 moves_to_search += 1
-                if score is None:
-                    unscored_to_search += 1
-                    self.count_unscored.inc()
 
         newly_scored_moves = {"depth": depth}
         minicache = {}  # store candidate PVs for all newly scored moves
         futures = {}
+        tried_unscored = False
 
         for move in board.legal_moves:
             ucimove = move.uci()
@@ -315,17 +312,16 @@ class ChessDB:
             if moves_to_search == 1 and score == bestscore and depth > 4:
                 newdepth += 1
 
-            # if unscored moves are to be searched, schedule only those
-            if unscored_to_search and score is not None:
-                newdepth = -1
-
-            # schedule qualifying moves for deeper searches
-            if newdepth >= 0:
+            # schedule qualifying moves for deeper searches, at most 1 unscored move
+            if newdepth >= 0 and not (score is None and tried_unscored):
                 board.push(move)
                 futures[ucimove] = self.executorTree[ply].submit(
                     self.search, board.copy(), newdepth
                 )
                 board.pop()
+                if score is None:
+                    tried_unscored = True
+                    self.count_unscored.inc()
             elif score is not None:
                 newly_scored_moves[ucimove] = scored_db_moves[ucimove]
                 minicache[ucimove] = [ucimove]
