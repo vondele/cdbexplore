@@ -14,7 +14,7 @@ Using some concurrency, fairly deep exploration is quickly possible.
 This is a command line program to explore a single position.
 
 ```
-usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY]
+usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins]
 
 Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position.
 
@@ -71,7 +71,7 @@ URL        : Link displaying the found PV in chessdb.
 This is a command line program to sequentially explore several positions.
 
 ```
-usage: cdbbulksearch.py [-h] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--bulkConcurrency BULKCONCURRENCY] [--forever] filename
+usage: cdbbulksearch.py [-h] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--bulkConcurrency BULKCONCURRENCY] [--forever] filename
 
 Sequentially call cdbsearch for EPDs or book exits stored in a file.
 
