@@ -238,7 +238,7 @@ class ChessDB:
     def search(self, board, depth):
         # returns (bestscore, pv) for current position stored in board
 
-        # ply stores how many plies we are away from rootBoard
+        # ply stores the level of the search tree we are in, i.e. how many plies we are away from rootBoard
         ply = len(board.move_stack) - len(self.rootBoard.move_stack)
 
         if board.is_checkmate():
