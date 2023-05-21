@@ -424,9 +424,8 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
             print("  enqueued  : ", chessdb.count_enqueued.get())
             print("  unscored  : ", chessdb.count_unscored.get())
             print("  date      : ", datetime.now().isoformat())
-            print(
-                "  total time: ", str(timedelta(seconds=int(100 * runtime) / 100))[:-4]
-            )
+            timestr = str(timedelta(seconds=int(100 * runtime) / 100))
+            print("  total time: ", timestr[: -4 if "." in timestr else None])
             print(
                 "  req. time : ",
                 int(1000 * runtime / chessdb.count_uncached.get()),
