@@ -259,6 +259,8 @@ class ChessDB:
         if scored_db_moves == {}:
             return (0, ["invalid"])
 
+        scoreCount = len(scored_db_moves) - 1  # number of scored moves for board
+
         # also force a query for high depth moves that do not have a full list of scored moves,
         # we use this to add newly scored moves to our TT
         skipTT_db_moves = None
@@ -313,7 +315,10 @@ class ChessDB:
                 newdepth += 1
 
             # schedule qualifying moves for deeper searches, at most 1 unscored move
-            if newdepth >= 0 and not (score is None and tried_unscored):
+            # for sufficiently large depth and suffiently small scoreCount we possibly schedule an unscored move
+            if (newdepth >= 0 and not (score is None and tried_unscored)) or (
+                score is None and not tried_unscored and depth > 15 + scoreCount
+            ):
                 board.push(move)
                 futures[ucimove] = self.executorTree[ply].submit(
                     self.search, board.copy(), newdepth
