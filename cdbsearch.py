@@ -63,6 +63,7 @@ class ChessDB:
         self.count_queryall = AtomicInteger()
         self.count_uncached = AtomicInteger()
         self.count_enqueued = AtomicInteger()
+        self.count_unscored = AtomicInteger()
         self.count_inflightRequests = AtomicInteger()
         self.count_sumInflightRequests = AtomicInteger()
 
@@ -230,7 +231,7 @@ class ChessDB:
 
     def move_depth(self, bestscore, worstscore, score, depth):
         # returns depth - 1 for bestmove and negative values for bad moves, terminating their search
-        # unknown moves are treated worse than worstmove, returning at most 0
+        # unscored moves are treated worse than worstmove, returning at most 0
         delta = score - bestscore if score is not None else worstscore - bestscore
         decay = delta // self.evalDecay if self.evalDecay != 0 else 10**6 * delta
         return depth + decay - 1 if score is not None else min(0, depth + decay - 2)
@@ -257,6 +258,8 @@ class ChessDB:
         ).result()
         if scored_db_moves == {}:
             return (0, ["invalid"])
+
+        scoreCount = len(scored_db_moves) - 1  # number of scored moves for board
 
         # also force a query for high depth moves that do not have a full list of scored moves,
         # we use this to add newly scored moves to our TT
@@ -298,7 +301,7 @@ class ChessDB:
                 moves_to_search += 1
 
         newly_scored_moves = {"depth": depth}
-        minicache = {}  # store candidate PVs for all known moves
+        minicache = {}  # store candidate PVs for all newly scored moves
         futures = {}
         tried_unscored = False
 
@@ -307,18 +310,23 @@ class ChessDB:
             score = scored_db_moves.get(ucimove, None)
             newdepth = self.move_depth(bestscore, worstscore, score, depth)
 
-            # extension
-            if moves_to_search == 1 and bestscore == score and depth > 4:
+            # extension if the unique bestmove is the only move to be searched deeper
+            if moves_to_search == 1 and score == bestscore and depth > 4:
                 newdepth += 1
 
-            # schedule qualifying moves for deeper searches, stopping once an unknown move was scheduled
-            if newdepth >= 0 and not tried_unscored:
+            # schedule qualifying moves for deeper searches, at most 1 unscored move
+            # for sufficiently large depth and suffiently small scoreCount we possibly schedule an unscored move
+            if (newdepth >= 0 and not (score is None and tried_unscored)) or (
+                score is None and not tried_unscored and depth > 15 + scoreCount
+            ):
                 board.push(move)
                 futures[ucimove] = self.executorTree[ply].submit(
                     self.search, board.copy(), newdepth
                 )
                 board.pop()
-                tried_unscored = True if score is None else tried_unscored
+                if score is None:
+                    tried_unscored = True
+                    self.count_unscored.inc()
             elif score is not None:
                 newly_scored_moves[ucimove] = scored_db_moves[ucimove]
                 minicache[ucimove] = [ucimove]
@@ -414,6 +422,7 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
             )
             print("  chessdbq  : ", chessdb.count_uncached.get())
             print("  enqueued  : ", chessdb.count_enqueued.get())
+            print("  unscored  : ", chessdb.count_unscored.get())
             print("  date      : ", datetime.now().isoformat())
             print(
                 "  total time: ", str(timedelta(seconds=int(100 * runtime) / 100))[:-4]
