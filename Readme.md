@@ -89,7 +89,7 @@ options:
   --cursedWins          Argument passed to cdbsearch. (default: False)
   --bulkConcurrency BULKCONCURRENCY
                         Number of concurrent processes running cdbsearch. (default: 4)
-  --forever             Pass positions from filename to cdbsearch in an infinite loop. (default: False)
+  --forever             Pass positions from filename to cdbsearch in an infinite loop, increasing depthLimit by one after each completed cycle. (default: False)
 ```
 
 Example:

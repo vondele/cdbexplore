@@ -65,7 +65,7 @@ if __name__ == "__main__":
     argParser.add_argument(
         "--forever",
         action="store_true",
-        help="Pass positions from filename to cdbsearch in an infinite loop.",
+        help="Pass positions from filename to cdbsearch in an infinite loop, increasing depthLimit by one after each completed cycle.",
     )
     args = argParser.parse_args()
 
@@ -96,6 +96,7 @@ if __name__ == "__main__":
         pass
 
     isPGN = args.filename.endswith(".pgn")
+    depthLimit = args.depthLimit
     while True:  # if args.forever is true, run indefinitely; o/w stop after one run
         # re-reading the data in each loop allows updates to it in the background
         metalist = []
@@ -151,7 +152,7 @@ if __name__ == "__main__":
                         executor.submit(
                             wrapcdbsearch,
                             epd=epd,
-                            depthLimit=args.depthLimit,
+                            depthLimit=depthLimit,
                             concurrency=args.concurrency,
                             evalDecay=args.evalDecay,
                             cursedWins=args.cursedWins,
@@ -164,7 +165,7 @@ if __name__ == "__main__":
             for epd, f in fs:
                 print(
                     "=" * 72
-                    + f'\nAwaiting results for exploration of EPD "{epd}" to depth {args.depthLimit} ... ',
+                    + f'\nAwaiting results for exploration of EPD "{epd}" to depth {depthLimit} ... ',
                     flush=True,
                 )
                 try:
@@ -173,5 +174,6 @@ if __name__ == "__main__":
                     print(f' error: caught exception "{ex}"')
 
         print(f"Done processing {args.filename}.")
+        depthLimit += 1
         if not args.forever:
             break
