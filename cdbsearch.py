@@ -243,7 +243,7 @@ class ChessDB:
         ply = len(board.move_stack) - len(self.rootBoard.move_stack)
 
         if board.is_checkmate():
-            return (-40000 + ply, ["checkmate"])
+            return (-29999, ["checkmate"])
 
         if (
             board.is_stalemate()
@@ -369,6 +369,11 @@ class ChessDB:
 
         if depth > 15:
             self.reprobe_PV(board, minicache[bestmove])
+
+        if bestscore > 25000:
+            bestscore -= 1
+        elif bestscore < -25000:
+            bestscore += 1
 
         return (bestscore, minicache[bestmove])
 
