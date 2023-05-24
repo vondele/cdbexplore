@@ -7,6 +7,12 @@ import concurrent.futures
 from datetime import datetime, timedelta
 from multiprocessing import freeze_support
 
+# current conventions on chessdb.cn for mates, TBwins, cursed wins and special evals
+CDB_MATE = 30000
+CDB_TBWIN = 25000
+CDB_CURSED = 20000
+CDB_SPECIAL = 10000
+
 
 class AtomicTT:
     def __init__(self):
@@ -187,9 +193,13 @@ class ChessDB:
                 try:
                     for m in content["moves"]:
                         s = m["score"]
-                        if not self.cursedWins and 15000 <= abs(s) and abs(s) <= 20000:
-                            # cursed wins are TB mates that run afoul of 50mr
-                            s = 0
+                        if abs(s) >= CDB_SPECIAL:
+                            if not self.cursedWins and abs(s) <= CDB_CURSED:
+                                # cursed wins are TB mates that run afoul of 50mr
+                                s = 0
+                            else:
+                                # to stay in sync with cdb evals, we need to counter-act the bestscore off-set applied later on
+                                s += 1 if s >= 0 else -1
                         result[m["uci"]] = s
                 except:
                     # we do not trust possibly partial move information received
@@ -239,11 +249,8 @@ class ChessDB:
     def search(self, board, depth):
         # returns (bestscore, pv) for current position stored in board
 
-        # ply stores the level of the search tree we are in, i.e. how many plies we are away from rootBoard
-        ply = len(board.move_stack) - len(self.rootBoard.move_stack)
-
         if board.is_checkmate():
-            return (-29999, ["checkmate"])
+            return (-CDB_MATE, ["checkmate"])
 
         if (
             board.is_stalemate()
@@ -273,9 +280,9 @@ class ChessDB:
                     )
                     break
 
-        bestscore = -40001
+        bestscore = -(CDB_MATE + 1)
         bestmove = None
-        worstscore = +40001
+        worstscore = CDB_MATE + 1
 
         for m, s in scored_db_moves.items():
             if m == "depth":
@@ -285,6 +292,9 @@ class ChessDB:
                 bestmove = m
             if s < worstscore:
                 worstscore = s
+
+        # ply stores the level of the search tree we are in, i.e. how many plies we are away from rootBoard
+        ply = len(board.move_stack) - len(self.rootBoard.move_stack)
 
         # guarantee sufficient length of the executorTree list
         while len(self.executorTree) < ply + 1:
@@ -357,7 +367,7 @@ class ChessDB:
         self.TT.set(board.epd(), newly_scored_moves)
 
         # find bestmove and associated PV
-        bestscore = -40001
+        bestscore = -(CDB_MATE + 1)
         for m, s in newly_scored_moves.items():
             if m == "depth":
                 continue
@@ -370,10 +380,10 @@ class ChessDB:
         if depth > 15:
             self.reprobe_PV(board, minicache[bestmove])
 
-        if bestscore > 25000:
-            bestscore -= 1
-        elif bestscore < -25000:
-            bestscore += 1
+        # for lines leading to mates, TBwins and cursed wins we do not use mini-max, but rather store the distance in ply
+        # this means local evals for such nodes will always be in sync with cdb
+        if abs(bestscore) > CDB_SPECIAL:
+            bestscore -= 1 if bestscore >= 0 else -1
 
         return (bestscore, minicache[bestmove])
 
