@@ -11,7 +11,7 @@ from multiprocessing import freeze_support
 CDB_MATE = 30000
 CDB_TBWIN = 25000
 CDB_CURSED = 20000
-CDB_SPECIAL = 15000
+CDB_SPECIAL = 10000
 
 
 class AtomicTT:
