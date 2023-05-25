@@ -82,6 +82,9 @@ class ChessDB:
         # our dictionary to cache intermediate results
         self.TT = AtomicTT()
 
+        # a dictionary storing the distance to leaf for positions on cdb PVs
+        self.cdbPvToLeaf = {}
+
         # list of ThreadPoolExecutors, one for each level
         self.executorTree = []
 
@@ -99,6 +102,32 @@ class ChessDB:
             content = None
         self.count_inflightRequests.dec()
         return content
+
+    def add_cdb_pv_positions(self, epd):
+        """query cdb for the PV of the position and create a dictionary containing these positions and their distance to the PV leaf for extensions during search"""
+        api = "http://www.chessdb.cn/cdb.php"
+        timeout = 15
+        url = api + f"?action=querypv&board={epd}&json=1"
+        content = self.__apicall(url, timeout)
+        pvlen = 0
+        if (
+            content
+            and "status" in content
+            and content["status"] == "ok"
+            and "pv" in content
+        ):
+            pv = content["pv"]
+            pvlen = remaining = len(pv)
+            board = chess.Board(epd)
+            self.cdbPvToLeaf[board.epd()] = remaining
+            self.executorWork.submit(self.queryall, board.epd())
+            for m in pv:
+                move = chess.Move.from_uci(m)
+                board.push(move)
+                remaining -= 1
+                self.cdbPvToLeaf[board.epd()] = remaining
+                self.executorWork.submit(self.queryall, board.epd())
+        return pvlen
 
     def queryall(self, epd, skipTT):
         """query chessdb until scored moves come back"""
@@ -320,9 +349,14 @@ class ChessDB:
             score = scored_db_moves.get(ucimove, None)
             newdepth = self.move_depth(bestscore, worstscore, score, depth)
 
-            # extension if the unique bestmove is the only move to be searched deeper
-            if moves_to_search == 1 and score == bestscore and depth > 4:
-                newdepth += 1
+            # extension if the unique bestmove is the only move to be searched deeper or the position is in the cdb PV
+            if score == bestscore:
+                epd = board.epd()
+                if moves_to_search == 1 and depth > 4:
+                    newdepth += 1
+                elif epd in self.cdbPvToLeaf:
+                    if newdepth < self.cdbPvToLeaf[epd]:
+                        newdepth += 1
 
             # schedule qualifying moves for deeper searches, at most 1 unscored move
             # for sufficiently large depth and suffiently small scoreCount we possibly schedule an unscored move
@@ -423,12 +457,18 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
 
     depth = 1
     while depthLimit is None or depth <= depthLimit:
+        print("Search at depth ", depth)
+        added = chessdb.add_cdb_pv_positions(board.epd())
+        print("  cdb PV len: ", added, flush=True)
         bestscore, pv = chessdb.search(board, depth)
         runtime = time.perf_counter() - chessdb.count_starttime
         queryall = chessdb.count_queryall.get()
-        print("Search at depth ", depth)
         print("  score     : ", bestscore)
         print("  PV        : ", " ".join(pv))
+        print(
+            "  PV len    : ",
+            len([m for m in pv if m not in ["checkmate", "draw", "invalid"]]),
+        )
         if queryall:
             print("  queryall  : ", queryall)
             print(f"  bf        :  { queryall**(1/depth) :.2f}")

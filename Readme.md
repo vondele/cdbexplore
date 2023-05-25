@@ -34,26 +34,31 @@ options:
 Sample output:
 
 ```
-Search at depth  13
-  score     :  126
-  PV        :  d7d5 e2e3 b8c6 d2d4 e7e5 b1c3 c8e6 d4e5 c6e5 h2h3 h7h5 g1f3 e5f3 d1f3 h5g4
-  queryall  :  24745
-  bf        :  2.18
-  inflight  :  12.55
-  chessdbq  :  6733
-  enqueued  :  5
-  unscored  :  2
-  date      :  2023-05-20T19:31:50.668334
-  total time:  0:02:55.59
-  req. time :  26
-  URL       :  https://chessdb.cn/queryc_en/?rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR_w_KQkq_-_moves_g2g4_d7d5_e2e3_b8c6_d2d4_e7e5_b1c3_c8e6_d4e5_c6e5_h2h3_h7h5_g1f3_e5f3_d1f3_h5g4
+Search at depth  6
+  cdb PV len:  60
+  score     :  120
+  PV        :  d7d5 e2e3 b8c6 d2d4 e7e5 b1c3 c8e6 d4e5 c6e5
+  PV len    :  9
+  queryall  :  186
+  bf        :  2.39
+  inflight  :  0.66
+  chessdbq  :  91
+  enqueued  :  2
+  unscored  :  1
+  date      :  2023-05-25T17:21:30.928458
+  total time:  0:00:30.73
+  req. time :  337
+  URL       :  https://chessdb.cn/queryc_en/?rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR_w_KQkq_-_moves_g2g4_d7d5_e2e3_b8c6_d2d4_e7e5_b1c3_c8e6_d4e5_c6e5
+
 ```
 
 Meaning of the fields:
 
 ```
+cdb PV len : Current length of the PV for this position in cdb in plies.
 score      : The standard minimax score found, not using the decay that cdb implements.
 PV         : Best line found.
+PV len     : length of this PV line in plies.
 queryall   : Number of positions visited in the search tree, with results provided by cdb or the local cache.
 bf         : Branching factor q^(1/d) computed from queryall q and depth d.
 inflight   : Number of active/concurrent requests made to cdb on average.
