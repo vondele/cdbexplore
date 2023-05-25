@@ -103,12 +103,12 @@ class ChessDB:
         self.count_inflightRequests.dec()
         return content
 
+    def __cdbapicall(self, action, timeout):
+        return self.__apicall("http://www.chessdb.cn/cdb.php" + action, timeout)
+
     def add_cdb_pv_positions(self, epd):
         """query cdb for the PV of the position and create a dictionary containing these positions and their distance to the PV leaf for extensions during search"""
-        api = "http://www.chessdb.cn/cdb.php"
-        timeout = 15
-        url = api + f"?action=querypv&board={epd}&json=1"
-        content = self.__apicall(url, timeout)
+        content = self.__cdbapicall(f"?action=querypv&board={epd}&json=1", timeout=15)
         pvlen = 0
         if (
             content
@@ -117,19 +117,18 @@ class ChessDB:
             and "pv" in content
         ):
             pv = content["pv"]
-            pvlen = remaining = len(pv)
+            pvlen = len(pv)
             board = chess.Board(epd)
-            self.cdbPvToLeaf[board.epd()] = remaining
+            self.cdbPvToLeaf[board.epd()] = pvlen
             self.executorWork.submit(self.queryall, board.epd())
-            for m in pv:
+            for parsed, m in enumerate(pv):
                 move = chess.Move.from_uci(m)
                 board.push(move)
-                remaining -= 1
-                self.cdbPvToLeaf[board.epd()] = remaining
+                self.cdbPvToLeaf[board.epd()] = pvlen - 1 - parsed
                 self.executorWork.submit(self.queryall, board.epd())
         return pvlen
 
-    def queryall(self, epd, skipTT):
+    def queryall(self, epd, skipTT=False):
         """query chessdb until scored moves come back"""
 
         # book keeping of calls and average in flight requests.
@@ -145,7 +144,6 @@ class ChessDB:
         # if uncached retrieve from chessdb
         self.count_uncached.inc()
 
-        api = "http://www.chessdb.cn/cdb.php"
         timeout = 5
         found = False
         first = True
@@ -172,8 +170,7 @@ class ChessDB:
             else:
                 first = False
 
-            url = api + f"?action=queryall&board={epd}&json=1"
-            content = self.__apicall(url, timeout)
+            content = self.__cdbapicall(f"?action=queryall&board={epd}&json=1", timeout)
 
             if content is None:
                 lasterror = "Something went wrong with queryall"
@@ -189,14 +186,14 @@ class ChessDB:
                     enqueued = True
                     self.count_enqueued.inc()
 
-                url = api + f"?action=queue&board={epd}&json=1"
-                content = self.__apicall(url, timeout)
+                content = self.__cdbapicall(
+                    f"?action=queue&board={epd}&json=1", timeout
+                )
                 if content is None:
                     lasterror = "Something went wrong with queue"
                     continue
 
-                # special case, position not available in cdb,
-                # e.g. in TB but with castling rights.
+                # special case: position not available in cdb, e.g. in TB but with castling rights
                 # score all moves as draw, and let search figure it out
                 if content == {}:
                     found = True
@@ -212,8 +209,7 @@ class ChessDB:
 
             elif content["status"] == "rate limit exceeded":
                 # special case, request to clear the limit
-                url = api + "?action=clearlimit"
-                self.__apicall(url, timeout)
+                self.__cdbapicall("?action=clearlimit", timeout)
                 lasterror = "Asked to clearlimit"
                 continue
 
@@ -251,10 +247,10 @@ class ChessDB:
         # set and return a possibly even deeper result
         return self.TT.set(epd, result)
 
-    # query all positions along the PV back to the root
-    def reprobe_PV(self, board, PV):
+    def reprobe_PV(self, board, pv):
+        """query all positions along the PV back to the root"""
         local_board = board.copy()
-        for ucimove in PV:
+        for ucimove in pv:
             try:
                 move = chess.Move.from_uci(ucimove)
                 local_board.push(move)
@@ -269,31 +265,28 @@ class ChessDB:
                 break
 
     def move_depth(self, bestscore, worstscore, score, depth):
-        # returns depth - 1 for bestmove and negative values for bad moves, terminating their search
-        # unscored moves are treated worse than worstmove, returning at most 0
+        """returns depth - 1 for bestmove and negative values for bad moves, terminating their search; unscored moves are treated worse than worstmove, returning at most 0"""
         delta = score - bestscore if score is not None else worstscore - bestscore
         decay = delta // self.evalDecay if self.evalDecay != 0 else 10**6 * delta
         return depth + decay - 1 if score is not None else min(0, depth + decay - 2)
 
     def search(self, board, depth):
-        # returns (bestscore, pv) for current position stored in board
+        """returns (bestscore, pv) for current position stored in board"""
 
         if board.is_checkmate():
-            return (-CDB_MATE, ["checkmate"])
+            return -CDB_MATE, ["checkmate"]
 
         if (
             board.is_stalemate()
             or board.is_insufficient_material()
             or board.can_claim_draw()
         ):
-            return (0, ["draw"])
+            return 0, ["draw"]
 
         # get current ranking, use an executor to limit total requests in flight
-        scored_db_moves = self.executorWork.submit(
-            self.queryall, board.epd(), skipTT=False
-        ).result()
+        scored_db_moves = self.executorWork.submit(self.queryall, board.epd()).result()
         if scored_db_moves == {}:
-            return (0, ["invalid"])
+            return 0, ["invalid"]
 
         scoreCount = len(scored_db_moves) - 1  # number of scored moves for board
 
@@ -351,12 +344,11 @@ class ChessDB:
 
             # extension if the unique bestmove is the only move to be searched deeper or the position is in the cdb PV
             if score == bestscore:
-                epd = board.epd()
-                if moves_to_search == 1 and depth > 4:
+                cdbPvToLeaf = self.cdbPvToLeaf.get(board.epd(), None)
+                if (moves_to_search == 1 and depth > 4) or (
+                    cdbPvToLeaf is not None and newdepth < cdbPvToLeaf
+                ):
                     newdepth += 1
-                elif epd in self.cdbPvToLeaf:
-                    if newdepth < self.cdbPvToLeaf[epd]:
-                        newdepth += 1
 
             # schedule qualifying moves for deeper searches, at most 1 unscored move
             # for sufficiently large depth and suffiently small scoreCount we possibly schedule an unscored move
@@ -419,19 +411,18 @@ class ChessDB:
         if abs(bestscore) > CDB_SPECIAL:
             bestscore -= 1 if bestscore >= 0 else -1
 
-        return (bestscore, minicache[bestmove])
+        return bestscore, minicache[bestmove]
 
 
 def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
-    # on 32-bit systems, such as Raspberry Pi, it is prudent to adjust the
-    # thread stack size before calling this method, as seen in __main__ below
+    """on 32-bit systems, such as Raspberry Pi, it is prudent to adjust the thread stack size before calling this method, as seen in __main__ below"""
 
     concurrency = max(1, concurrency)
     evalDecay = max(0, evalDecay)
 
     # basic output
     print("Searched epd : ", epd)
-    print("evalDecay: ", evalDecay)
+    print("evalDecay    : ", evalDecay)
     print("Concurrency  : ", concurrency)
     print("Starting date: ", datetime.now().isoformat())
 
@@ -467,7 +458,7 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
         print("  PV        : ", " ".join(pv))
         print(
             "  PV len    : ",
-            len([m for m in pv if m not in ["checkmate", "draw", "invalid"]]),
+            len(pv) - (1 if pv[-1] in ["checkmate", "draw", "invalid"] else 0),
         )
         if queryall:
             print("  queryall  : ", queryall)
@@ -487,13 +478,12 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
             )
 
         pvline = " ".join(
-            [m for m in epdMoves + pv if m not in ["checkmate", "draw", "invalid"]]
+            epdMoves + pv[: -1 if pv[-1] in ["checkmate", "draw", "invalid"] else None]
         )
         if pvline:
             pvline = " moves " + pvline
         url = f"https://chessdb.cn/queryc_en/?{epd}{pvline}"
         print("  URL       : ", url.replace(" ", "_"))
-
         print("", flush=True)
         depth += 1
         if pv in [["checkmate"], ["draw"], ["invalid"]]:  # nothing to be done
