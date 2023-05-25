@@ -116,9 +116,9 @@ class ChessDB:
             and "pv" in content
         ):
             pv = content["pv"]
+            self.cdbPvToLeaf[epd] = len(pv)
+            self.executorWork.submit(self.queryall, epd)
             board = chess.Board(epd)
-            self.cdbPvToLeaf[board.epd()] = len(pv)
-            self.executorWork.submit(self.queryall, board.epd())
             for parsed, m in enumerate(pv):
                 move = chess.Move.from_uci(m)
                 board.push(move)
