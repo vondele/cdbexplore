@@ -162,10 +162,10 @@ if __name__ == "__main__":
             print(
                 f"Scheduled {len(fs)} positions to be explored with concurrency {args.bulkConcurrency}."
             )
-            for epd, f in fs:
+            for countDone, (epd, f) in enumerate(fs):
                 print(
                     "=" * 72
-                    + f'\nAwaiting results for exploration of EPD "{epd}" to depth {depthLimit} ... ',
+                    + f'\nAwaiting results for exploration of EPD "{epd}" ({countDone + 1} / {len(fs)}) to depth {depthLimit} ... ',
                     flush=True,
                 )
                 try:
