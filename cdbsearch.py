@@ -109,7 +109,6 @@ class ChessDB:
     def add_cdb_pv_positions(self, epd):
         """query cdb for the PV of the position and create a dictionary containing these positions and their distance to the PV leaf for extensions during search"""
         content = self.__cdbapicall(f"?action=querypv&board={epd}&json=1", timeout=15)
-        pvlen = 0
         if (
             content
             and "status" in content
@@ -117,16 +116,14 @@ class ChessDB:
             and "pv" in content
         ):
             pv = content["pv"]
-            pvlen = len(pv)
+            self.cdbPvToLeaf[epd] = len(pv)
+            self.executorWork.submit(self.queryall, epd)
             board = chess.Board(epd)
-            self.cdbPvToLeaf[board.epd()] = pvlen
-            self.executorWork.submit(self.queryall, board.epd())
             for parsed, m in enumerate(pv):
                 move = chess.Move.from_uci(m)
                 board.push(move)
-                self.cdbPvToLeaf[board.epd()] = pvlen - 1 - parsed
+                self.cdbPvToLeaf[board.epd()] = len(pv) - 1 - parsed
                 self.executorWork.submit(self.queryall, board.epd())
-        return pvlen
 
     def queryall(self, epd, skipTT=False):
         """query chessdb until scored moves come back"""
@@ -449,8 +446,8 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
     depth = 1
     while depthLimit is None or depth <= depthLimit:
         print("Search at depth ", depth)
-        added = chessdb.add_cdb_pv_positions(board.epd())
-        print("  cdb PV len: ", added, flush=True)
+        chessdb.add_cdb_pv_positions(board.epd())
+        print("  cdb PV len: ", chessdb.cdbPvToLeaf.get(board.epd(), 0), flush=True)
         bestscore, pv = chessdb.search(board, depth)
         runtime = time.perf_counter() - chessdb.count_starttime
         queryall = chessdb.count_queryall.get()
