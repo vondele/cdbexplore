@@ -103,12 +103,12 @@ class ChessDB:
         self.count_inflightRequests.dec()
         return content
 
-    def __cdbapicall(self, action, timeout):
+    def cdbapicall(self, action, timeout):
         return self.__apicall("http://www.chessdb.cn/cdb.php" + action, timeout)
 
     def add_cdb_pv_positions(self, epd):
         """query cdb for the PV of the position and create a dictionary containing these positions and their distance to the PV leaf for extensions during search"""
-        content = self.__cdbapicall(f"?action=querypv&board={epd}&json=1", timeout=15)
+        content = self.cdbapicall(f"?action=querypv&board={epd}&json=1", timeout=15)
         if (
             content
             and "status" in content
@@ -167,7 +167,7 @@ class ChessDB:
             else:
                 first = False
 
-            content = self.__cdbapicall(f"?action=queryall&board={epd}&json=1", timeout)
+            content = self.cdbapicall(f"?action=queryall&board={epd}&json=1", timeout)
 
             if content is None:
                 lasterror = "Something went wrong with queryall"
@@ -183,9 +183,7 @@ class ChessDB:
                     enqueued = True
                     self.count_enqueued.inc()
 
-                content = self.__cdbapicall(
-                    f"?action=queue&board={epd}&json=1", timeout
-                )
+                content = self.cdbapicall(f"?action=queue&board={epd}&json=1", timeout)
                 if content is None:
                     lasterror = "Something went wrong with queue"
                     continue
@@ -206,7 +204,7 @@ class ChessDB:
 
             elif content["status"] == "rate limit exceeded":
                 # special case, request to clear the limit
-                self.__cdbapicall("?action=clearlimit", timeout)
+                self.cdbapicall("?action=clearlimit", timeout)
                 lasterror = "Asked to clearlimit"
                 continue
 
