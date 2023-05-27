@@ -5,6 +5,7 @@ import cdbsearch
 import concurrent.futures
 import signal
 from multiprocessing import freeze_support, active_children
+from collections import deque
 
 
 def wrapcdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
@@ -96,59 +97,76 @@ if __name__ == "__main__":
         pass
 
     isPGN = args.filename.endswith(".pgn")
-    depthLimit = args.depthLimit
-    while True:  # if args.forever is true, run indefinitely; o/w stop after one run
-        # re-reading the data in each loop allows updates to it in the background
-        metalist = []
-        if isPGN:
-            pgn = open(args.filename)
-            while game := chess.pgn.read_game(pgn):
-                metalist.append(game)
-            print(f"Read {len(metalist)} (opening) lines from file {args.filename}.")
-        else:
-            with open(args.filename) as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        if line.startswith("#"):  # ignore comments
-                            continue
-                        epd, _, moves = line.partition("moves")
-                        epd = " ".join(
-                            epd.split()[:4]
-                        )  # cdb ignores move counters anyway
-                        epdMoves = " moves"
-                        for m in moves.split():
-                            if (
-                                len(m) < 4
-                                or len(m) > 5
-                                or not {m[0], m[2]}.issubset(set("abcdefgh"))
-                                or not {m[1], m[3]}.issubset(set("12345678"))
-                                or (len(m) == 5 and not m[4] in "qrbn")
-                            ):
-                                break
-                            epdMoves += f" {m}"
-                        if epdMoves != " moves":
-                            epd += epdMoves
-                        metalist.append(epd)
-            print(f"Read {len(metalist)} EPDs from file {args.filename}.")
+    metalist = []
+    if isPGN:
+        pgn = open(args.filename)
+        while game := chess.pgn.read_game(pgn):
+            metalist.append(game)
+        print(f"Read {len(metalist)} (opening) lines from file {args.filename}.")
+    else:
+        with open(args.filename) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    if line.startswith("#"):  # ignore comments
+                        continue
+                    epd, _, moves = line.partition("moves")
+                    epd = " ".join(epd.split()[:4])  # cdb ignores move counters anyway
+                    epdMoves = " moves"
+                    for m in moves.split():
+                        if (
+                            len(m) < 4
+                            or len(m) > 5
+                            or not {m[0], m[2]}.issubset(set("abcdefgh"))
+                            or not {m[1], m[3]}.issubset(set("12345678"))
+                            or (len(m) == 5 and not m[4] in "qrbn")
+                        ):
+                            break
+                        epdMoves += f" {m}"
+                    if epdMoves != " moves":
+                        epd += epdMoves
+                    metalist.append(epd)
 
-        with concurrent.futures.ProcessPoolExecutor(
-            max_workers=args.bulkConcurrency
-        ) as executor:
-            fs = []
-            print("Scheduling work ... ", flush=True)
-            for item in metalist:
-                if isPGN:
-                    epd = item.board().epd()
-                    if len(list(item.mainline_moves())):
-                        epd += " moves"
-                    for move in item.mainline_moves():
-                        epd += f" {move}"
-                else:
-                    epd = item
-                fs.append(
+    epds = []
+    for item in metalist:
+        if isPGN:
+            epd = item.board().epd()
+            if len(list(item.mainline_moves())):
+                epd += " moves"
+            for move in item.mainline_moves():
+                epd += f" {move}"
+        else:
+            epd = item
+        epds.append(epd)
+
+    print(f"Using {len(epds)} EPDs from file {args.filename}.")
+
+    epdIdx = 0
+    depthLimit = args.depthLimit
+
+    executor = concurrent.futures.ProcessPoolExecutor(max_workers=args.bulkConcurrency)
+    print(f"Positions to be explored with concurrency {args.bulkConcurrency}.")
+
+    tasks = deque()
+    task = None
+
+    while True:
+        if epdIdx == len(epds):
+            # We arrived at the end of the list: see if we cycle or break.
+            if args.forever:
+                depthLimit += 1
+                epdIdx = 0
+            elif task is None and len(tasks) == 0:
+                break
+        else:
+            # Add some more tasks to the list if few are pending
+            if executor._call_queue.qsize() < 2 * args.bulkConcurrency:
+                epd = epds[epdIdx]
+                tasks.append(
                     (
                         epd,
+                        epdIdx,
+                        depthLimit,
                         executor.submit(
                             wrapcdbsearch,
                             epd=epd,
@@ -159,21 +177,26 @@ if __name__ == "__main__":
                         ),
                     )
                 )
-            print(
-                f"Scheduled {len(fs)} positions to be explored with concurrency {args.bulkConcurrency}."
-            )
-            for countDone, (epd, f) in enumerate(fs):
+                epdIdx += 1
+
+        if task is None:
+            if len(tasks) > 0:
+                task = tasks.popleft()
                 print(
                     "=" * 72
-                    + f'\nAwaiting results for exploration of EPD "{epd}" ({countDone + 1} / {len(fs)}) to depth {depthLimit} ... ',
+                    + f'\nAwaiting results for exploration of EPD "{task[0]}" ({task[1] + 1} / {len(epds)}) to depth {task[2]} ... ',
                     flush=True,
                 )
-                try:
-                    print(f.result(), flush=True)
-                except Exception as ex:
-                    print(f' error: caught exception "{ex}"')
+        else:
+            # See if we have a result, if not continue.
+            try:
+                print(task[3].result(timeout=0.01), flush=True)
+                task = None
+            except concurrent.futures.TimeoutError:
+                pass
+            except Exception as ex:
+                print(f' error: caught exception "{ex}"')
+                task = None
 
-        print(f"Done processing {args.filename}.")
-        depthLimit += 1
-        if not args.forever:
-            break
+    executor.shutdown()
+    print(f"Done processing {args.filename}.")
