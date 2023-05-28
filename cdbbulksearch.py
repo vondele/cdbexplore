@@ -150,6 +150,21 @@ if __name__ == "__main__":
     tasks = deque()
     task = None
 
+    class TaskCounter:
+        def __init__(self):
+            self.counter = 0
+
+        def inc(self):
+            self.counter += 1
+
+        def dec(self, fn):
+            self.counter -= 1
+
+        def get(self):
+            return self.counter
+
+    taskCounter = TaskCounter()
+
     while True:
         if epdIdx == len(epds):
             # We arrived at the end of the list: see if we cycle or break.
@@ -160,21 +175,24 @@ if __name__ == "__main__":
                 break
         else:
             # Add some more tasks to the list if few are pending
-            if executor._call_queue.qsize() < 2 * args.bulkConcurrency:
+            if taskCounter.get() < 2 * args.bulkConcurrency:
                 epd = epds[epdIdx]
+                future = executor.submit(
+                    wrapcdbsearch,
+                    epd=epd,
+                    depthLimit=depthLimit,
+                    concurrency=args.concurrency,
+                    evalDecay=args.evalDecay,
+                    cursedWins=args.cursedWins,
+                )
+                taskCounter.inc()
+                future.add_done_callback(taskCounter.dec)
                 tasks.append(
                     (
                         epd,
                         epdIdx,
                         depthLimit,
-                        executor.submit(
-                            wrapcdbsearch,
-                            epd=epd,
-                            depthLimit=depthLimit,
-                            concurrency=args.concurrency,
-                            evalDecay=args.evalDecay,
-                            cursedWins=args.cursedWins,
-                        ),
+                        future,
                     )
                 )
                 epdIdx += 1
