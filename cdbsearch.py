@@ -146,7 +146,7 @@ class ChessDB:
         board = chess.Board(epd)
         if len(pv) % 2 == 0:  # we just need to check the defender's moves
             board.push(chess.Move.from_uci(pv[0]))
-            return self.pv_has_proven_mate(board.epd(), pv[1:])
+            return await self.pv_has_proven_mate(board.epd(), pv[1:])
 
         scored_db_moves = await self.queryall(epd)
         if len(scored_db_moves) - 1 != len(list(board.legal_moves)):
@@ -165,7 +165,7 @@ class ChessDB:
         # we need to check if the _given_ PV is a correct mating line:
         for m in pv[:2]:
             board.push(chess.Move.from_uci(m))
-        if not self.pv_has_proven_mate(board.epd(), pv[2:]):
+        if not await self.pv_has_proven_mate(board.epd(), pv[2:]):
             return False
         for _ in [0, 1]:
             board.pop()
@@ -178,7 +178,7 @@ class ChessDB:
             # @vondele: not sure about this line, e.g. is the depth enough?
             # (the searches can be parallelized in future)
             _, mpv = await self.search(board.copy(), len(pv) - 2)
-            if not self.pv_has_proven_mate(board.epd(), mpv):
+            if not await self.pv_has_proven_mate(board.epd(), mpv):
                 return False
             board.pop()
 
