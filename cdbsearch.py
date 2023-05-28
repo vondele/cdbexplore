@@ -106,7 +106,7 @@ class ChessDB:
     def __cdbapicall(self, action, timeout):
         return self.__apicall("http://www.chessdb.cn/cdb.php" + action, timeout)
 
-    def add_cdb_pv_positions(self, epd):
+    def add_cdb_pv_positions(self, epd, depth):
         """query cdb for the PV of the position and create a dictionary containing these positions and their distance to the PV leaf for extensions during search"""
         content = self.__cdbapicall(f"?action=querypv&board={epd}&json=1", timeout=15)
         if (
@@ -115,7 +115,8 @@ class ChessDB:
             and content["status"] == "ok"
             and "pv" in content
         ):
-            pv = content["pv"]
+            # cut off pv at depths, as storing longer distances would have no effect on extensions
+            pv = content["pv"][:depth]
             self.cdbPvToLeaf[epd] = len(pv)
             self.executorWork.submit(self.queryall, epd)
             board = chess.Board(epd)
@@ -446,7 +447,7 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
     depth = 1
     while depthLimit is None or depth <= depthLimit:
         print("Search at depth ", depth)
-        chessdb.add_cdb_pv_positions(board.epd())
+        chessdb.add_cdb_pv_positions(board.epd(), depth)
         print("  cdb PV len: ", chessdb.cdbPvToLeaf.get(board.epd(), 0), flush=True)
         bestscore, pv = chessdb.search(board, depth)
         runtime = time.perf_counter() - chessdb.count_starttime
