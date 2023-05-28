@@ -148,7 +148,7 @@ class ChessDB:
             board.push(chess.Move.from_uci(pv[0]))
             return self.pv_has_proven_mate(board.epd(), pv[1:])
 
-        scored_db_moves = self.executorWork.submit(self.queryall, epd).result()
+        scored_db_moves = await self.queryall(epd)
         if len(scored_db_moves) - 1 != len(list(board.legal_moves)):
             # there are unscored moves for epd
             # help to construct a proof by querying all yet unscored moves of board
@@ -177,9 +177,7 @@ class ChessDB:
             board.push(chess.Move.from_uci(m))
             # @vondele: not sure about this line, e.g. is the depth enough?
             # (the searches can be parallelized in future)
-            _, mpv = self.executorWork.submit(
-                self.search, board.copy(), len(pv) - 2
-            ).result()
+            _, mpv = await self.search(board.copy(), len(pv) - 2)
             if not self.pv_has_proven_mate(board.epd(), mpv):
                 return False
             board.pop()
