@@ -153,15 +153,17 @@ class ChessDB:
         for _ in [0, 1]:
             board.pop()
 
+        _ = input(f"Check all moves in {scored_db_moves}")
         for m in scored_db_moves:
             if m == "depth" or m == pv[0]:  # the move that is first PV move was already checked
                 continue
             board.push(chess.Move.from_uci(m))
             # @vondele: not sure about this line (the searches can be parallelized in future)
-            _, mpv = self.executorWork.submit(self.search, board.epd(),len(pv) - 2).result()
+            _, mpv = self.executorWork.submit(self.search, board.copy(), len(pv) - 2).result()
             if not self.pv_has_proven_mate(board.epd(), mpv):
                 return False
             board.pop()
+        return True
 
     def queryall(self, epd, skipTT=False):
         """query chessdb until scored moves come back"""
