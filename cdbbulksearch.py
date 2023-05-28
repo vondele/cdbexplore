@@ -1,4 +1,5 @@
 import argparse, sys, signal
+import asyncio
 import chess, chess.pgn
 import concurrent.futures
 import cdbsearch
@@ -11,12 +12,14 @@ def wrapcdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
     old_stdout = sys.stdout
     sys.stdout = mystdout = StringIO()
     try:
-        cdbsearch.cdbsearch(
-            epd=epd,
-            depthLimit=depthLimit,
-            concurrency=concurrency,
-            evalDecay=evalDecay,
-            cursedWins=cursedWins,
+        asyncio.run(
+            cdbsearch.cdbsearch(
+                epd=epd,
+                depthLimit=depthLimit,
+                concurrency=concurrency,
+                evalDecay=evalDecay,
+                cursedWins=cursedWins,
+            )
         )
     except Exception as ex:
         print(f' error: while searching {epd} caught exception "{ex}"')
@@ -135,11 +138,6 @@ if __name__ == "__main__":
         help="Reload positions from filename when tasks for new cycle are needed.",
     )
     args = argParser.parse_args()
-
-    if sys.maxsize <= 2**32:
-        # on 32-bit systems we limit thread stack size, as many are created
-        stackSize = 4096 * 64
-        threading.stack_size(stackSize)
 
     def on_sigint(signal, frame):
         print("Received signal to terminate. Killing sub-processes.", flush=True)
