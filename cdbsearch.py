@@ -137,7 +137,7 @@ class ChessDB:
                 self.cdbPvToLeaf[board.epd()] = len(pv) - 1 - parsed
                 asyncio.ensure_future(self.queryall(board.epd()))
 
-    def pv_has_proven_mate(self, epd, pv):
+    async def pv_has_proven_mate(self, epd, pv):
         """check if the PV line is a proven mate on cdb, and if not help prove it"""
         if not pv or pv[-1] != "checkmate":
             return False
@@ -505,7 +505,7 @@ async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
         if pv[-1] in ["checkmate", "draw", "invalid"]:
             pvlen = len(pv) - 1
             if pv[-1] == "checkmate":
-                if chessdb.pv_has_proven_mate(board.epd(), pv):
+                if await chessdb.pv_has_proven_mate(board.epd(), pv):
                     pv[-1] = "CHECKMATE"
         else:
             pvlen = len(pv)
