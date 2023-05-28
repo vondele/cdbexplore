@@ -146,6 +146,7 @@ class ChessDB:
                 if ucimove not in scored_db_moves:
                     board.push(move)
                     self.queryall(board.epd())
+                    self.count_unscored.inc()
                     board.pop()
             return False
 
@@ -533,7 +534,7 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
         print("  URL       : ", url.replace(" ", "_"))
         print("", flush=True)
         depth += 1
-        if pv in [["checkmate"], ["draw"], ["invalid"]]:  # nothing to be done
+        if pv in [["CHECKMATE"], ["draw"], ["invalid"]]:  # nothing to be done
             break
 
 
