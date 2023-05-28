@@ -125,6 +125,17 @@ class ChessDB:
                 self.cdbPvToLeaf[board.epd()] = len(pv) - 1 - parsed
                 self.executorWork.submit(self.queryall, board.epd())
 
+    def pv_has_proven_mate(self, epd, pv):
+        """check if the PV line is a proven mate on cdb, and if not help prove it"""
+        scored_db_moves = self.executorWork.submit(self.queryall, epd).result()
+        bestscore = 
+        board = chess.Board(epd)
+        for parsed, m in enumerate(pv):
+            move = chess.Move.from_uci(m)
+            board.push(move)
+            self.cdbPvToLeaf[board.epd()] = len(pv) - 1 - parsed
+            self.executorWork.submit(self.queryall, board.epd())
+
     def queryall(self, epd, skipTT=False):
         """query chessdb until scored moves come back"""
 
@@ -284,6 +295,8 @@ class ChessDB:
         scored_db_moves = self.executorWork.submit(self.queryall, board.epd()).result()
         if scored_db_moves == {}:
             return 0, ["invalid"]
+
+        print(scored_db_moves)
 
         scoreCount = len(scored_db_moves) - 1  # number of scored moves for board
 
@@ -449,14 +462,18 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
         chessdb.add_cdb_pv_positions(board.epd())
         print("  cdb PV len: ", chessdb.cdbPvToLeaf.get(board.epd(), 0), flush=True)
         bestscore, pv = chessdb.search(board, depth)
+        if pv[-1] in ["checkmate", "draw", "invalid"]:
+            pvlen = len(pv) - 1
+            if pv[-1] == "checkmate":
+                if pv_has_proven_mate(board.epd(), pv[-1]):
+                    pv[-1] = "CHECKMATE"
+        else:
+            pvlen = len(pv)
         runtime = time.perf_counter() - chessdb.count_starttime
         queryall = chessdb.count_queryall.get()
         print("  score     : ", bestscore)
         print("  PV        : ", " ".join(pv))
-        print(
-            "  PV len    : ",
-            len(pv) - (1 if pv[-1] in ["checkmate", "draw", "invalid"] else 0),
-        )
+        print("  PV len    : ", pvlen)
         if queryall:
             print("  queryall  : ", queryall)
             print(f"  bf        :  { queryall**(1/depth) :.2f}")
@@ -474,9 +491,7 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
                 int(1000 * runtime / chessdb.count_uncached.get()),
             )
 
-        pvline = " ".join(
-            epdMoves + pv[: -1 if pv[-1] in ["checkmate", "draw", "invalid"] else None]
-        )
+        pvline = " ".join(epdMoves + pv[:pvlen])
         if pvline:
             pvline = " moves " + pvline
         url = f"https://chessdb.cn/queryc_en/?{epd}{pvline}"
