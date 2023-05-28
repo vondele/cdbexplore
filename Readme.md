@@ -76,7 +76,7 @@ URL        : Link displaying the found PV in chessdb.
 This is a command line program to sequentially explore several positions.
 
 ```
-usage: cdbbulksearch.py [-h] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--bulkConcurrency BULKCONCURRENCY] [--forever] filename
+usage: cdbbulksearch.py [-h] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--bulkConcurrency BULKCONCURRENCY] [--forever] [--reload] filename
 
 Sequentially call cdbsearch for EPDs or book exits stored in a file.
 
@@ -95,6 +95,7 @@ options:
   --bulkConcurrency BULKCONCURRENCY
                         Number of concurrent processes running cdbsearch. (default: 4)
   --forever             Pass positions from filename to cdbsearch in an infinite loop, increasing depthLimit by one after each completed cycle. (default: False)
+  --reload              Reload positions from filename when tasks for new cycle are needed. (default: False)
 ```
 
 Example:

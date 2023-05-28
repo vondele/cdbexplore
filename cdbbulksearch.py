@@ -1,9 +1,8 @@
-from io import StringIO
-import argparse, sys
+import argparse, sys, signal
 import chess, chess.pgn
-import cdbsearch
 import concurrent.futures
-import signal
+import cdbsearch
+from io import StringIO
 from multiprocessing import freeze_support, active_children
 from collections import deque
 
@@ -23,6 +22,68 @@ def wrapcdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
         print(f' error: while searching {epd} caught exception "{ex}"')
     sys.stdout = old_stdout
     return mystdout.getvalue()
+
+
+def load_epds(filename, pgnPlyBegin=-1, pgnPlyEnd=None):
+    isPGN = filename.endswith(".pgn")
+    metalist = []
+    if isPGN:
+        pgn = open(args.filename)
+        while game := chess.pgn.read_game(pgn):
+            metalist.append(game)
+        print(f"Loaded {len(metalist)} (opening) lines from file {args.filename}.")
+    else:
+        with open(args.filename) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    if line.startswith("#"):  # ignore comments
+                        continue
+                    epd, _, moves = line.partition("moves")
+                    epd = " ".join(epd.split()[:4])  # cdb ignores move counters anyway
+                    epdMoves = " moves"
+                    for m in moves.split():
+                        if (
+                            len(m) < 4
+                            or len(m) > 5
+                            or not {m[0], m[2]}.issubset(set("abcdefgh"))
+                            or not {m[1], m[3]}.issubset(set("12345678"))
+                            or (len(m) == 5 and not m[4] in "qrbn")
+                        ):
+                            break
+                        epdMoves += f" {m}"
+                    if epdMoves != " moves":
+                        epd += epdMoves
+                    metalist.append(epd)
+
+    epds = []
+    for item in metalist:
+        if isPGN:
+            epd = item.board().epd()
+            if len(list(item.mainline_moves())):
+                epd += " moves"
+            for move in item.mainline_moves():
+                epd += f" {move}"
+        else:
+            epd = item
+        epds.append(epd)
+
+    print(f"Loaded {len(epds)} EPDs from file {args.filename}.")
+    return epds
+
+
+class TaskCounter:
+    def __init__(self):
+        self.counter = 0
+
+    def inc(self):
+        self.counter += 1
+
+    def dec(self, fn):
+        self.counter -= 1
+
+    def get(self):
+        return self.counter
 
 
 if __name__ == "__main__":
@@ -68,6 +129,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Pass positions from filename to cdbsearch in an infinite loop, increasing depthLimit by one after each completed cycle.",
     )
+    argParser.add_argument(
+        "--reload",
+        action="store_true",
+        help="Reload positions from filename when tasks for new cycle are needed.",
+    )
     args = argParser.parse_args()
 
     if sys.maxsize <= 2**32:
@@ -96,80 +162,26 @@ if __name__ == "__main__":
         # Linux does not have SIGBREAK.
         pass
 
-    isPGN = args.filename.endswith(".pgn")
-    metalist = []
-    if isPGN:
-        pgn = open(args.filename)
-        while game := chess.pgn.read_game(pgn):
-            metalist.append(game)
-        print(f"Read {len(metalist)} (opening) lines from file {args.filename}.")
-    else:
-        with open(args.filename) as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    if line.startswith("#"):  # ignore comments
-                        continue
-                    epd, _, moves = line.partition("moves")
-                    epd = " ".join(epd.split()[:4])  # cdb ignores move counters anyway
-                    epdMoves = " moves"
-                    for m in moves.split():
-                        if (
-                            len(m) < 4
-                            or len(m) > 5
-                            or not {m[0], m[2]}.issubset(set("abcdefgh"))
-                            or not {m[1], m[3]}.issubset(set("12345678"))
-                            or (len(m) == 5 and not m[4] in "qrbn")
-                        ):
-                            break
-                        epdMoves += f" {m}"
-                    if epdMoves != " moves":
-                        epd += epdMoves
-                    metalist.append(epd)
-
-    epds = []
-    for item in metalist:
-        if isPGN:
-            epd = item.board().epd()
-            if len(list(item.mainline_moves())):
-                epd += " moves"
-            for move in item.mainline_moves():
-                epd += f" {move}"
-        else:
-            epd = item
-        epds.append(epd)
-
-    print(f"Using {len(epds)} EPDs from file {args.filename}.")
-
-    epdIdx = 0
-    depthLimit = args.depthLimit
-
     executor = concurrent.futures.ProcessPoolExecutor(max_workers=args.bulkConcurrency)
     print(f"Positions to be explored with concurrency {args.bulkConcurrency}.")
 
     tasks = deque()
     task = None
-
-    class TaskCounter:
-        def __init__(self):
-            self.counter = 0
-
-        def inc(self):
-            self.counter += 1
-
-        def dec(self, fn):
-            self.counter -= 1
-
-        def get(self):
-            return self.counter
-
     taskCounter = TaskCounter()
+    first = True
+    epdIdx, epds = 0, []
 
     while True:
         if epdIdx == len(epds):
-            # We arrived at the end of the list: see if we cycle or break.
-            if args.forever:
-                depthLimit += 1
+            # First loop, or we arrived at the end of the list: in that case see if we cycle or break.
+            if first or args.forever:
+                if first or args.reload:
+                    epds = load_epds(args.filename)
+                if first:
+                    depthLimit = args.depthLimit
+                    first = False
+                else:
+                    depthLimit += 1
                 epdIdx = 0
             elif task is None and len(tasks) == 0:
                 break
@@ -189,7 +201,7 @@ if __name__ == "__main__":
                 future.add_done_callback(taskCounter.dec)
                 tasks.append(
                     (
-                        epd,
+                        epds,
                         epdIdx,
                         depthLimit,
                         future,
@@ -202,7 +214,7 @@ if __name__ == "__main__":
                 task = tasks.popleft()
                 print(
                     "=" * 72
-                    + f'\nAwaiting results for exploration of EPD "{task[0]}" ({task[1] + 1} / {len(epds)}) to depth {task[2]} ... ',
+                    + f'\nAwaiting results for exploration of EPD "{task[0][task[1]]}" ({task[1] + 1} / {len(task[0])}) to depth {task[2]} ... ',
                     flush=True,
                 )
         else:
