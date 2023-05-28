@@ -127,10 +127,8 @@ class ChessDB:
 
     def pv_has_proven_mate(self, epd, pv):
         """check if the PV line is a proven mate on cdb, and if not help prove it"""
-        print("Enter with pv = ", pv)
         if not pv or pv[-1] != "checkmate":
             return False
-        _ = input(f"before board, len(pv) = {len(pv)}, % 2 = {len(pv) % 2}")
         if pv == ["checkmate"]:
             return True
         board = chess.Board(epd)
@@ -139,10 +137,16 @@ class ChessDB:
             return self.pv_has_proven_mate(board.epd(), pv[1:])
 
         scored_db_moves = self.executorWork.submit(self.queryall, epd).result()
-        print(scored_db_moves)
-        _ = input(f"#legal moves = {len(list(board.legal_moves))}, # scored = {len(scored_db_moves) - 1}")
-        if len(list(board.legal_moves)) != len(scored_db_moves) - 1: # there are unscored moves for epd
-            # do here the helping proof bit
+        if len(scored_db_moves) - 1 != len(list(board.legal_moves)):
+            # there are unscored moves for epd
+            # help to construct a proof by querying all yet unscored moves of board
+            # (can be parallelized later)
+            for move in board.legal_moves:
+                ucimove = move.uci()
+                if ucimove not in scored_db_moves:
+                    board.push(move)
+                    self.queryall(board.epd())
+                    board.pop()
             return False
 
         # we need to check if the _given_ PV is a correct mating line:
@@ -153,16 +157,20 @@ class ChessDB:
         for _ in [0, 1]:
             board.pop()
 
-        _ = input(f"Check all moves in {scored_db_moves}")
         for m in scored_db_moves:
-            if m == "depth" or m == pv[0]:  # the move that is first PV move was already checked
+            if m == "depth" or m == pv[0]:
+                # the move that is the first PV move was already checked
                 continue
             board.push(chess.Move.from_uci(m))
-            # @vondele: not sure about this line (the searches can be parallelized in future)
-            _, mpv = self.executorWork.submit(self.search, board.copy(), len(pv) - 2).result()
+            # @vondele: not sure about this line, e.g. is the depth enough?
+            # (the searches can be parallelized in future)
+            _, mpv = self.executorWork.submit(
+                self.search, board.copy(), len(pv) - 2
+            ).result()
             if not self.pv_has_proven_mate(board.epd(), mpv):
                 return False
             board.pop()
+
         return True
 
     def queryall(self, epd, skipTT=False):
