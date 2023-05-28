@@ -127,14 +127,41 @@ class ChessDB:
 
     def pv_has_proven_mate(self, epd, pv):
         """check if the PV line is a proven mate on cdb, and if not help prove it"""
-        scored_db_moves = self.executorWork.submit(self.queryall, epd).result()
-        bestscore = 
+        print("Enter with pv = ", pv)
+        if not pv or pv[-1] != "checkmate":
+            return False
+        _ = input(f"before board, len(pv) = {len(pv)}, % 2 = {len(pv) % 2}")
+        if pv == ["checkmate"]:
+            return True
         board = chess.Board(epd)
-        for parsed, m in enumerate(pv):
-            move = chess.Move.from_uci(m)
-            board.push(move)
-            self.cdbPvToLeaf[board.epd()] = len(pv) - 1 - parsed
-            self.executorWork.submit(self.queryall, board.epd())
+        if len(pv) % 2 == 0:  # we just need to check the defender's moves
+            board.push(chess.Move.from_uci(pv[0]))
+            return self.pv_has_proven_mate(board.epd(), pv[1:])
+
+        scored_db_moves = self.executorWork.submit(self.queryall, epd).result()
+        print(scored_db_moves)
+        _ = input(f"#legal moves = {len(list(board.legal_moves))}, # scored = {len(scored_db_moves) - 1}")
+        if len(list(board.legal_moves)) != len(scored_db_moves) - 1: # there are unscored moves for epd
+            # do here the helping proof bit
+            return False
+
+        # we need to check if the _given_ PV is a correct mating line:
+        for m in pv[:2]:
+            board.push(chess.Move.from_uci(m))
+        if not self.pv_has_proven_mate(board.epd(), pv[2:]):
+            return False
+        for _ in [0, 1]:
+            board.pop()
+
+        for m in scored_db_moves:
+            if m == "depth" or m == pv[0]:  # the move that is first PV move was already checked
+                continue
+            board.push(chess.Move.from_uci(m))
+            # @vondele: not sure about this line (the searches can be parallelized in future)
+            _, mpv = self.executorWork.submit(self.search, board.epd(),len(pv) - 2).result()
+            if not self.pv_has_proven_mate(board.epd(), mpv):
+                return False
+            board.pop()
 
     def queryall(self, epd, skipTT=False):
         """query chessdb until scored moves come back"""
@@ -295,8 +322,6 @@ class ChessDB:
         scored_db_moves = self.executorWork.submit(self.queryall, board.epd()).result()
         if scored_db_moves == {}:
             return 0, ["invalid"]
-
-        print(scored_db_moves)
 
         scoreCount = len(scored_db_moves) - 1  # number of scored moves for board
 
@@ -465,7 +490,7 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
         if pv[-1] in ["checkmate", "draw", "invalid"]:
             pvlen = len(pv) - 1
             if pv[-1] == "checkmate":
-                if pv_has_proven_mate(board.epd(), pv[-1]):
+                if chessdb.pv_has_proven_mate(board.epd(), pv):
                     pv[-1] = "CHECKMATE"
         else:
             pvlen = len(pv)
