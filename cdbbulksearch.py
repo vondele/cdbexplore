@@ -1,4 +1,5 @@
 from io import StringIO
+import asyncio
 import argparse, sys
 import chess, chess.pgn
 import cdbsearch
@@ -12,12 +13,14 @@ def wrapcdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
     old_stdout = sys.stdout
     sys.stdout = mystdout = StringIO()
     try:
-        cdbsearch.cdbsearch(
-            epd=epd,
-            depthLimit=depthLimit,
-            concurrency=concurrency,
-            evalDecay=evalDecay,
-            cursedWins=cursedWins,
+        asyncio.run(
+            cdbsearch.cdbsearch(
+                epd=epd,
+                depthLimit=depthLimit,
+                concurrency=concurrency,
+                evalDecay=evalDecay,
+                cursedWins=cursedWins,
+            )
         )
     except Exception as ex:
         print(f' error: while searching {epd} caught exception "{ex}"')
@@ -69,11 +72,6 @@ if __name__ == "__main__":
         help="Pass positions from filename to cdbsearch in an infinite loop, increasing depthLimit by one after each completed cycle.",
     )
     args = argParser.parse_args()
-
-    if sys.maxsize <= 2**32:
-        # on 32-bit systems we limit thread stack size, as many are created
-        stackSize = 4096 * 64
-        threading.stack_size(stackSize)
 
     def on_sigint(signal, frame):
         print("Received signal to terminate. Killing sub-processes.", flush=True)

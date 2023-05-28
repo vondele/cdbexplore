@@ -1,3 +1,4 @@
+import asyncio
 import requests
 import time
 import chess
@@ -85,14 +86,16 @@ class ChessDB:
         # a dictionary storing the distance to leaf for positions on cdb PVs
         self.cdbPvToLeaf = {}
 
-        # list of ThreadPoolExecutors, one for each level
-        self.executorTree = []
+        # a semaphore is used to limit the number of concurrent accesses to the api
+        self.semaphoreWork = asyncio.Semaphore(self.concurrency)
 
+        # to do some of the blocking IO we use this thread pool, TODO look into aiohttp
         self.executorWork = concurrent.futures.ThreadPoolExecutor(
             max_workers=self.concurrency
         )
 
     def __apicall(self, url, timeout):
+        """our blocking apicall, not to be called directly"""
         self.count_inflightRequests.inc()
         try:
             response = self.session.get(url, timeout=timeout)
@@ -103,12 +106,21 @@ class ChessDB:
         self.count_inflightRequests.dec()
         return content
 
-    def __cdbapicall(self, action, timeout):
-        return self.__apicall("http://www.chessdb.cn/cdb.php" + action, timeout)
+    async def __cdbapicall(self, action, timeout):
+        """co-routine to access the api"""
+        async with self.semaphoreWork:
+            return await asyncio.get_running_loop().run_in_executor(
+                self.executorWork,
+                self.__apicall,
+                "http://www.chessdb.cn/cdb.php" + action,
+                timeout,
+            )
 
-    def add_cdb_pv_positions(self, epd):
+    async def add_cdb_pv_positions(self, epd):
         """query cdb for the PV of the position and create a dictionary containing these positions and their distance to the PV leaf for extensions during search"""
-        content = self.__cdbapicall(f"?action=querypv&board={epd}&json=1", timeout=15)
+        content = await self.__cdbapicall(
+            f"?action=querypv&board={epd}&json=1", timeout=15
+        )
         if (
             content
             and "status" in content
@@ -117,13 +129,13 @@ class ChessDB:
         ):
             pv = content["pv"]
             self.cdbPvToLeaf[epd] = len(pv)
-            self.executorWork.submit(self.queryall, epd)
             board = chess.Board(epd)
+            asyncio.ensure_future(self.queryall(board.epd()))
             for parsed, m in enumerate(pv):
                 move = chess.Move.from_uci(m)
                 board.push(move)
                 self.cdbPvToLeaf[board.epd()] = len(pv) - 1 - parsed
-                self.executorWork.submit(self.queryall, board.epd())
+                asyncio.ensure_future(self.queryall(board.epd()))
 
     def pv_has_proven_mate(self, epd, pv):
         """check if the PV line is a proven mate on cdb, and if not help prove it"""
@@ -174,7 +186,7 @@ class ChessDB:
 
         return True
 
-    def queryall(self, epd, skipTT=False):
+    async def queryall(self, epd, skipTT=False):
         """query chessdb until scored moves come back"""
 
         # book keeping of calls and average in flight requests.
@@ -212,11 +224,13 @@ class ChessDB:
                         lasterror,
                         flush=True,
                     )
-                time.sleep(timeout)
+                await asyncio.sleep(timeout)
             else:
                 first = False
 
-            content = self.__cdbapicall(f"?action=queryall&board={epd}&json=1", timeout)
+            content = await self.__cdbapicall(
+                f"?action=queryall&board={epd}&json=1", timeout
+            )
 
             if content is None:
                 lasterror = "Something went wrong with queryall"
@@ -232,7 +246,7 @@ class ChessDB:
                     enqueued = True
                     self.count_enqueued.inc()
 
-                content = self.__cdbapicall(
+                content = await self.__cdbapicall(
                     f"?action=queue&board={epd}&json=1", timeout
                 )
                 if content is None:
@@ -255,7 +269,7 @@ class ChessDB:
 
             elif content["status"] == "rate limit exceeded":
                 # special case, request to clear the limit
-                self.__cdbapicall("?action=clearlimit", timeout)
+                await self.__cdbapicall("?action=clearlimit", timeout)
                 lasterror = "Asked to clearlimit"
                 continue
 
@@ -293,7 +307,7 @@ class ChessDB:
         # set and return a possibly even deeper result
         return self.TT.set(epd, result)
 
-    def reprobe_PV(self, board, pv):
+    async def reprobe_PV(self, board, pv):
         """query all positions along the PV back to the root"""
         local_board = board.copy()
         for ucimove in pv:
@@ -304,7 +318,7 @@ class ChessDB:
                 pass
 
         while True:
-            self.executorWork.submit(self.queryall, local_board.epd(), skipTT=True)
+            asyncio.ensure_future(self.queryall(local_board.epd(), skipTT=True))
             try:
                 local_board.pop()
             except Exception:
@@ -316,7 +330,7 @@ class ChessDB:
         decay = delta // self.evalDecay if self.evalDecay != 0 else 10**6 * delta
         return depth + decay - 1 if score is not None else min(0, depth + decay - 2)
 
-    def search(self, board, depth):
+    async def search(self, board, depth):
         """returns (bestscore, pv) for current position stored in board"""
 
         if board.is_checkmate():
@@ -330,7 +344,7 @@ class ChessDB:
             return 0, ["draw"]
 
         # get current ranking, use an executor to limit total requests in flight
-        scored_db_moves = self.executorWork.submit(self.queryall, board.epd()).result()
+        scored_db_moves = await self.queryall(board.epd())
         if scored_db_moves == {}:
             return 0, ["invalid"]
 
@@ -343,8 +357,8 @@ class ChessDB:
             for move in board.legal_moves:
                 ucimove = move.uci()
                 if ucimove not in scored_db_moves:
-                    skipTT_db_moves = self.executorWork.submit(
-                        self.queryall, board.epd(), skipTT=True
+                    skipTT_db_moves = asyncio.create_task(
+                        self.queryall(board.epd(), skipTT=True)
                     )
                     break
 
@@ -364,12 +378,6 @@ class ChessDB:
         # ply stores the level of the search tree we are in, i.e. how many plies we are away from rootBoard
         ply = len(board.move_stack) - len(self.rootBoard.move_stack)
 
-        # guarantee sufficient length of the executorTree list
-        while len(self.executorTree) < ply + 1:
-            self.executorTree.append(
-                concurrent.futures.ThreadPoolExecutor(max_workers=self.concurrency)
-            )
-
         moves_to_search = 0
         for move in board.legal_moves:
             ucimove = move.uci()
@@ -380,7 +388,7 @@ class ChessDB:
 
         newly_scored_moves = {"depth": depth}
         minicache = {}  # store candidate PVs for all newly scored moves
-        futures = {}
+        tasks = {}
         tried_unscored = False
 
         for move in board.legal_moves:
@@ -402,8 +410,8 @@ class ChessDB:
                 score is None and not tried_unscored and depth > 15 + scoreCount
             ):
                 board.push(move)
-                futures[ucimove] = self.executorTree[ply].submit(
-                    self.search, board.copy(), newdepth
+                tasks[ucimove] = asyncio.create_task(
+                    self.search(board.copy(), newdepth)
                 )
                 board.pop()
                 if score is None:
@@ -414,14 +422,14 @@ class ChessDB:
                 minicache[ucimove] = [ucimove]
 
         # get the results from the futures
-        for ucimove, search in futures.items():
-            s, pv = search.result()
+        for ucimove, search in tasks.items():
+            s, pv = await search
             newly_scored_moves[ucimove] = -s
             minicache[ucimove] = [ucimove] + pv
 
         # add potentially newly scored moves, or moves we have not explored by search
         if skipTT_db_moves:
-            skipTT_db_moves = skipTT_db_moves.result()
+            skipTT_db_moves = await skipTT_db_moves
             for move in board.legal_moves:
                 ucimove = move.uci()
                 if ucimove in skipTT_db_moves:
@@ -460,9 +468,7 @@ class ChessDB:
         return bestscore, minicache[bestmove]
 
 
-def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
-    """on 32-bit systems, such as Raspberry Pi, it is prudent to adjust the thread stack size before calling this method, as seen in __main__ below"""
-
+async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
     concurrency = max(1, concurrency)
     evalDecay = max(0, evalDecay)
 
@@ -495,9 +501,9 @@ def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
     depth = 1
     while depthLimit is None or depth <= depthLimit:
         print("Search at depth ", depth)
-        chessdb.add_cdb_pv_positions(board.epd())
+        await chessdb.add_cdb_pv_positions(board.epd())
         print("  cdb PV len: ", chessdb.cdbPvToLeaf.get(board.epd(), 0), flush=True)
-        bestscore, pv = chessdb.search(board, depth)
+        bestscore, pv = await chessdb.search(board, depth)
         if pv[-1] in ["checkmate", "draw", "invalid"]:
             pvlen = len(pv) - 1
             if pv[-1] == "checkmate":
@@ -582,11 +588,6 @@ if __name__ == "__main__":
     )
     args = argParser.parse_args()
 
-    if sys.maxsize <= 2**32:
-        # on 32-bit systems we limit thread stack size, as many are created
-        stackSize = 4096 * 64
-        threading.stack_size(stackSize)
-
     if args.san is not None:
         import chess.pgn, io
 
@@ -601,10 +602,12 @@ if __name__ == "__main__":
     else:
         epd = args.epd
 
-    cdbsearch(
-        epd=epd,
-        depthLimit=args.depthLimit,
-        concurrency=args.concurrency,
-        evalDecay=args.evalDecay,
-        cursedWins=args.cursedWins,
+    asyncio.run(
+        cdbsearch(
+            epd=epd,
+            depthLimit=args.depthLimit,
+            concurrency=args.concurrency,
+            evalDecay=args.evalDecay,
+            cursedWins=args.cursedWins,
+        )
     )
