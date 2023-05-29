@@ -155,11 +155,12 @@ class ChessDB:
                     board.pop()
             return False
 
-        # we need to check if the _given_ PV is a correct mating line:
+        # we need to check if the _given_ PV is a correct mating line (once again just checking the defender's moves)
         for m in pv[:2]:
             board.push(chess.Move.from_uci(m))
         if not await self.pv_has_proven_mate(board.epd(), pv[2:]):
             return False
+        # undo the two moves to get back the old board state
         for _ in [0, 1]:
             board.pop()
 
