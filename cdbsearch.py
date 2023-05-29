@@ -335,7 +335,7 @@ class ChessDB:
         ):
             return 0, ["draw"]
 
-        # get current ranking, use an executor to limit total requests in flight TODO: update this comment
+        # get current ranking
         scored_db_moves = await self.queryall(board.epd())
         if scored_db_moves == {}:
             return 0, ["invalid"]
