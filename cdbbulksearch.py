@@ -26,6 +26,7 @@ def wrapcdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
 
 
 def load_epds(filename, pgnBegin=-1, pgnEnd=None):
+    """returns a list of unique EPDs found in the given file"""
     isPGN = filename.endswith(".pgn")
     metalist = []
     if isPGN:
@@ -57,7 +58,7 @@ def load_epds(filename, pgnBegin=-1, pgnEnd=None):
                         epd += epdMoves
                     metalist.append(epd)
 
-    epds = []
+    epds = {}
     for item in metalist:
         if isPGN:
             epd = item.board().epd()
@@ -77,16 +78,17 @@ def load_epds(filename, pgnBegin=-1, pgnEnd=None):
                 else min(pgnEnd, len(moves))
             )
             for ply, move in enumerate(moves):
+                if move is not None:
+                    epd += f" {move}"
                 if plyBegin <= ply and ply < plyEnd:
-                    if move is not None:
-                        epd += f" {move}"
-                    epds.append(epd)
+                    epds.update({epd: None})
                 if move is None:
                     epd += " moves"
         else:
-            epds.append(item)
+            epds.update({item: None})
+    epds = list(epds.keys())
 
-    print(f"Loaded {len(epds)} EPDs from file {args.filename}.")
+    print(f"Loaded {len(epds)} unique EPDs from file {args.filename}.")
     return epds
 
 
@@ -115,7 +117,7 @@ if __name__ == "__main__":
     )
     argParser.add_argument(
         "--pgnBegin",
-        help="Ply in each line of the PGN file from which positions will be searched by cdbsearch. A value of 0 corresponds to the starting FEN without any moves played.",
+        help="Ply in each line of the PGN file from which positions will be searched by cdbsearch. A value of 0 corresponds to the starting FEN without any moves played. Negative values count from the back, as per the Python standard.",
         type=int,
         default=-1,
     )

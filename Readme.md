@@ -85,7 +85,7 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
-  --pgnBegin PGNBEGIN   Ply in each line of the PGN file from which positions will be searched by cdbsearch. A value of 0 corresponds to the starting FEN without any moves played. (default: -1)
+  --pgnBegin PGNBEGIN   Ply in each line of the PGN file from which positions will be searched by cdbsearch. A value of 0 corresponds to the starting FEN without any moves played. Negative values count from the back, as per the Python standard. (default: -1)
   --pgnEnd PGNEND       Ply in each line of the PGN file until which positions will be searched by cdbsearch. A value of None means including the final move of the line. (default: None)
   --depthLimit DEPTHLIMIT
                         Argument passed to cdbsearch. (default: 5)
