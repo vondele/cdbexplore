@@ -203,7 +203,17 @@ if __name__ == "__main__":
             # First loop, or we arrived at the end of the list: in that case see if we cycle or break.
             if first or args.forever:
                 if first or args.reload:
-                    epds = load_epds(args.filename, args.pgnBegin, args.pgnEnd)
+                    try:
+                        epds = load_epds(args.filename, args.pgnBegin, args.pgnEnd)
+                    except Exception:
+                        if first:
+                            raise Exception(
+                                f"Error while trying to reload file {args.filename}."
+                            )
+                        else:
+                            print(
+                                f"Error while trying to reload file {args.filename}. Continue with old EPD list."
+                            )
                 if first:
                     depthLimit = args.depthLimit
                     first = False
