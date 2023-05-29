@@ -160,10 +160,10 @@ class ChessDB:
             board.push(chess.Move.from_uci(m))
         if not await self.pv_has_proven_mate(board.epd(), pv[2:]):
             return False
-        # undo the two moves to get back the old board state
         for _ in [0, 1]:
             board.pop()
 
+        # now we check if all the currently non-best moves also inevitably lead to the defender being mated
         for m in scored_db_moves:
             if m == "depth" or m == pv[0]:
                 # the move that is the first PV move was already checked
