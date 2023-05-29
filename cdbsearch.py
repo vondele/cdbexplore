@@ -456,7 +456,7 @@ class ChessDB:
                 bestmove = m
 
         if depth > 15:
-            self.reprobe_PV(board, minicache[bestmove])
+            await self.reprobe_PV(board, minicache[bestmove])
 
         # for lines leading to mates, TBwins and cursed wins we do not use mini-max, but rather store the distance in ply
         # this means local evals for such nodes will always be in sync with cdb
