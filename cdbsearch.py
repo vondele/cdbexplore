@@ -498,7 +498,14 @@ async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
             pvlen = len(pv) - 1
             if pv[-1] == "checkmate":
                 if await chessdb.pv_has_proven_mate(board.epd(), pv):
-                    pv[-1] = "CHECKMATE"
+                    pv[-1] = "CHECKMATE" + (
+                        ""
+                        if pvlen == 0
+                        else f" (#{(pvlen+1)//2})"
+                        if bestscore > 0
+                        else f" (#-{pvlen//2})"
+                    )
+
         else:
             pvlen = len(pv)
         runtime = time.perf_counter() - chessdb.count_starttime
