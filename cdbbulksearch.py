@@ -27,7 +27,7 @@ def wrapcdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
     return mystdout.getvalue()
 
 
-def load_epds(filename, pgnPlyBegin=-1, pgnPlyEnd=None):
+def load_epds(filename, pgnBegin=-1, pgnEnd=None):
     isPGN = filename.endswith(".pgn")
     metalist = []
     if isPGN:
@@ -63,13 +63,30 @@ def load_epds(filename, pgnPlyBegin=-1, pgnPlyEnd=None):
     for item in metalist:
         if isPGN:
             epd = item.board().epd()
-            if len(list(item.mainline_moves())):
-                epd += " moves"
-            for move in item.mainline_moves():
-                epd += f" {move}"
+            moves = [None] + list(item.mainline_moves())
+            plyBegin = (
+                0
+                if pgnBegin is None
+                else max(0, pgnBegin + len(moves))
+                if pgnBegin < 0
+                else min(pgnBegin, len(moves))
+            )
+            plyEnd = (
+                len(moves)
+                if pgnEnd is None
+                else max(0, pgnEnd + len(moves))
+                if plyEnd < 0
+                else min(pgnEnd, len(moves))
+            )
+            for ply, move in enumerate(moves):
+                if plyBegin <= ply and ply < plyEnd:
+                    if move is not None:
+                        epd += f" {move}"
+                    epds.append(epd)
+                if move is None:
+                    epd += " moves"
         else:
-            epd = item
-        epds.append(epd)
+            epds.append(item)
 
     print(f"Loaded {len(epds)} EPDs from file {args.filename}.")
     return epds
@@ -92,11 +109,23 @@ class TaskCounter:
 if __name__ == "__main__":
     freeze_support()
     argParser = argparse.ArgumentParser(
-        description="Sequentially call cdbsearch for EPDs or book exits stored in a file.",
+        description="Sequentially call cdbsearch for all the positions stored in a file.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     argParser.add_argument(
         "filename", help="PGN file if suffix is .pgn, o/w a text file with EPDs."
+    )
+    argParser.add_argument(
+        "--pgnBegin",
+        help="Ply in each line of the PGN file from which positions will be searched by cdbsearch. A value of 0 corresponds to the starting FEN without any moves played.",
+        type=int,
+        default=-1,
+    )
+    argParser.add_argument(
+        "--pgnEnd",
+        help="Ply in each line of the PGN file until which positions will be searched by cdbsearch. A value of None means including the final move of the line.",
+        type=int,
+        default=None,
     )
     argParser.add_argument(
         "--depthLimit",
@@ -174,7 +203,7 @@ if __name__ == "__main__":
             # First loop, or we arrived at the end of the list: in that case see if we cycle or break.
             if first or args.forever:
                 if first or args.reload:
-                    epds = load_epds(args.filename)
+                    epds = load_epds(args.filename, args.pgnBegin, args.pgnEnd)
                 if first:
                     depthLimit = args.depthLimit
                     first = False

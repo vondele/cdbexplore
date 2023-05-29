@@ -76,15 +76,17 @@ URL        : Link displaying the found PV in chessdb.
 This is a command line program to sequentially explore several positions.
 
 ```
-usage: cdbbulksearch.py [-h] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--bulkConcurrency BULKCONCURRENCY] [--forever] [--reload] filename
+usage: cdbbulksearch.py [-h] [--pgnBegin PGNBEGIN] [--pgnEnd PGNEND] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--bulkConcurrency BULKCONCURRENCY] [--forever] [--reload] filename
 
-Sequentially call cdbsearch for EPDs or book exits stored in a file.
+Sequentially call cdbsearch for all the positions stored in a file.
 
 positional arguments:
   filename              PGN file if suffix is .pgn, o/w a text file with EPDs.
 
 options:
   -h, --help            show this help message and exit
+  --pgnBegin PGNBEGIN   Ply in each line of the PGN file from which positions will be searched by cdbsearch. A value of 0 corresponds to the starting FEN without any moves played. (default: -1)
+  --pgnEnd PGNEND       Ply in each line of the PGN file until which positions will be searched by cdbsearch. A value of None means including the final move of the line. (default: None)
   --depthLimit DEPTHLIMIT
                         Argument passed to cdbsearch. (default: 5)
   --concurrency CONCURRENCY
