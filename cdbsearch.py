@@ -152,12 +152,11 @@ class ChessDB:
         if len(scored_db_moves) - 1 != len(list(board.legal_moves)):
             # there are unscored moves for epd
             # help to construct a proof by querying all yet unscored moves of board
-            # (can be parallelized later)
             for move in board.legal_moves:
                 ucimove = move.uci()
                 if ucimove not in scored_db_moves:
                     board.push(move)
-                    self.queryall(board.epd())
+                    asyncio.ensure_future(self.queryall(board.epd()))
                     self.count_unscored.inc()
                     board.pop()
             return False
@@ -175,8 +174,8 @@ class ChessDB:
                 # the move that is the first PV move was already checked
                 continue
             board.push(chess.Move.from_uci(m))
-            # @vondele: not sure about this line, e.g. is the depth enough?
-            # (the searches can be parallelized in future)
+            # as these recursive calls likely return False anyway, we do not run them in parallel and rather wait for each move in turn
+            # @vondele: not sure about this line: is the depth guaranteed to be enough to find the checkmate node?
             _, mpv = await self.search(board.copy(), len(pv) - 2)
             if not await self.pv_has_proven_mate(board.epd(), mpv):
                 return False

@@ -71,6 +71,8 @@ req. time  : Average time (in milliseconds) needed to get a cdb list of moves fo
 URL        : Link displaying the found PV in chessdb.
 ```
 
+Observe that `cdbsearch` is able to detect proven mate scores within cdb, and can help construct proofs for these. Once a proven mate line has been found, it is indicated by the PV ending in `CHECKMATE`, whereas `checkmate` simply indicates a PV line that ends in a checkmate, but in theory a better defence could exist.
+
 ## `cdbbulksearch`
 
 This is a command line program to sequentially explore several positions.
