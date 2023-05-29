@@ -1,7 +1,5 @@
-import argparse, sys, signal
-import asyncio
+import argparse, sys, signal, asyncio, concurrent.futures
 import chess, chess.pgn
-import concurrent.futures
 import cdbsearch
 from io import StringIO
 from multiprocessing import freeze_support, active_children
