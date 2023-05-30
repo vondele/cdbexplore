@@ -133,12 +133,11 @@ class ChessDB:
                 self.cdbPvToLeaf[board.epd()] = len(pv) - 1 - parsed
                 asyncio.ensure_future(self.queryall(board.epd()))
 
-    async def extract_cached_PV(self, epd, depth):
-        """extract the PV line for epd from cache, to the specified depth"""
-        board = chess.Board(epd)
+    async def obtain_PV(self, board, depth):
+        """obtain the PV line for position on board, to the specified depth"""
         if (t := self.check_trivial_PV(board)) is not None:
             return t[1]
-        scored_db_moves = await self.queryall(epd)
+        scored_db_moves = await self.queryall(board.epd())
         if scored_db_moves == {}:
             return ["invalid"]
         if depth == 0:
@@ -149,23 +148,23 @@ class ChessDB:
             reverse=True,
         )[0][0]
         board.push(chess.Move.from_uci(bestmove))
-        return [bestmove] + await self.extract_cached_PV(board.epd(), depth - 1)
+        # we walk along a single PV line with board, so no need to create a copy for the recursive call
+        return [bestmove] + await self.obtain_PV(board, depth - 1)
 
-    async def pv_has_proven_mate(self, epd, pv):
+    async def pv_has_proven_mate(self, board, pv):
         """check if the PV line is a proven mate on cdb, and if not help prove it"""
         if not pv or pv[-1] != "checkmate":
             return False
         if pv == ["checkmate"]:
             return True
-        board = chess.Board(epd)
+        # now pv is a list of moves, with pv[-2] the mating move, and pv[-1] == "checkmate"
         if len(pv) % 2 == 0:  # we just need to check the defender's moves
             board.push(chess.Move.from_uci(pv[0]))
-            return await self.pv_has_proven_mate(board.epd(), pv[1:])
+            return await self.pv_has_proven_mate(board.copy(), pv[1:])
 
-        scored_db_moves = await self.queryall(epd)
+        scored_db_moves = await self.queryall(board.epd())
         if len(scored_db_moves) - 1 != len(list(board.legal_moves)):
-            # there are unscored moves for epd
-            # help to construct a proof by querying all yet unscored moves of board
+            # there are unscored moves: help to construct a proof by querying all of them
             for move in board.legal_moves:
                 ucimove = move.uci()
                 if ucimove not in scored_db_moves:
@@ -178,21 +177,24 @@ class ChessDB:
         # we need to check if the _given_ PV is a correct mating line (once again just checking the defender's moves)
         for m in pv[:2]:
             board.push(chess.Move.from_uci(m))
-        if not await self.pv_has_proven_mate(board.epd(), pv[2:]):
+        if not await self.pv_has_proven_mate(board.copy(), pv[2:]):
             return False
         for _ in [0, 1]:
             board.pop()
 
         tasks = []
-        # now we check if all the currently non-best moves also inevitably lead to the defender being mated
+        # now we check if all the currently non-best moves also inevitably lead to the defender being mated (in at most the claimed number of moves)
         for m in scored_db_moves:
             if m == "depth" or m == pv[0]:
                 # the move that is the first PV move was already checked
                 continue
-            # we schedule the check of all the possible defences in parallel
+            # we schedule the check of all the alternative defending moves in parallel
             board.push(chess.Move.from_uci(m))
-            mpv = await self.extract_cached_PV(board.epd(), len(pv) - 2)
-            tasks.append(asyncio.create_task(self.pv_has_proven_mate(board.epd(), mpv)))
+            # the list pv contains "checkmate", so mate must be delivered in len(pv) - 2 plies
+            mpv = await self.obtain_PV(board.copy(), len(pv) - 2)
+            tasks.append(
+                asyncio.create_task(self.pv_has_proven_mate(board.copy(), mpv))
+            )
             board.pop()
 
         # if any of the possible defences does _not_ lead to a mate, the proof breaks down
