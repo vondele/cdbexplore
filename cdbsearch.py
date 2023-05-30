@@ -1,9 +1,12 @@
-import argparse, sys, asyncio, requests, time, threading, concurrent.futures
-import chess, chess.pgn
-from io import StringIO
+import asyncio
+import requests
+import time
+import chess
+import sys
+import threading
+import concurrent.futures
 from datetime import datetime, timedelta
 from multiprocessing import freeze_support
-
 
 # current conventions on chessdb.cn for mates, TBwins, cursed wins and special evals
 CDB_MATE = 30000
@@ -52,9 +55,12 @@ class AtomicInteger:
 
 
 class ChessDB:
-    def __init__(self, concurrency, cursedWins=False, rootBoard=chess.Board()):
-        # some user defined parameters
+    def __init__(
+        self, concurrency, evalDecay, cursedWins=False, rootBoard=chess.Board()
+    ):
+        # user defined parameters
         self.concurrency = concurrency
+        self.evalDecay = evalDecay
         self.cursedWins = cursedWins
 
         # the root position under which the tree will be built
@@ -170,8 +176,8 @@ class ChessDB:
                 continue
             board.push(chess.Move.from_uci(m))
             # as these recursive calls likely return False anyway, we do not run them in parallel and rather wait for each move in turn
-            # as we are only intested in the PV, we run with evalDecay=0
-            _, mpv = await self.search(board.copy(), depth=len(pv) - 2, evalDecay=0)
+            # @vondele: not sure about this line: is the depth guaranteed to be enough to find the checkmate node?
+            _, mpv = await self.search(board.copy(), len(pv) - 2)
             if not await self.pv_has_proven_mate(board.epd(), mpv):
                 return False
             board.pop()
@@ -316,13 +322,13 @@ class ChessDB:
             except Exception:
                 break
 
-    def move_depth(self, bestscore, worstscore, score, depth, evalDecay):
+    def move_depth(self, bestscore, worstscore, score, depth):
         """returns depth - 1 for bestmove and negative values for bad moves, terminating their search; unscored moves are treated worse than worstmove, returning at most 0"""
         delta = score - bestscore if score is not None else worstscore - bestscore
-        decay = delta // evalDecay if evalDecay != 0 else 10**6 * delta
+        decay = delta // self.evalDecay if self.evalDecay != 0 else 10**6 * delta
         return depth + decay - 1 if score is not None else min(0, depth + decay - 2)
 
-    async def search(self, board, depth, evalDecay):
+    async def search(self, board, depth):
         """returns (bestscore, pv) for current position stored in board"""
 
         if board.is_checkmate():
@@ -374,7 +380,7 @@ class ChessDB:
         for move in board.legal_moves:
             ucimove = move.uci()
             score = scored_db_moves.get(ucimove, None)
-            newdepth = self.move_depth(bestscore, worstscore, score, depth, evalDecay)
+            newdepth = self.move_depth(bestscore, worstscore, score, depth)
             if newdepth >= 0:
                 moves_to_search += 1
 
@@ -386,7 +392,7 @@ class ChessDB:
         for move in board.legal_moves:
             ucimove = move.uci()
             score = scored_db_moves.get(ucimove, None)
-            newdepth = self.move_depth(bestscore, worstscore, score, depth, evalDecay)
+            newdepth = self.move_depth(bestscore, worstscore, score, depth)
 
             # extension if the unique bestmove is the only move to be searched deeper or the position is in the cdb PV
             if score == bestscore:
@@ -403,7 +409,7 @@ class ChessDB:
             ):
                 board.push(move)
                 tasks[ucimove] = asyncio.create_task(
-                    self.search(board.copy(), newdepth, evalDecay)
+                    self.search(board.copy(), newdepth)
                 )
                 board.pop()
                 if score is None:
@@ -465,7 +471,7 @@ async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
     evalDecay = max(0, evalDecay)
 
     # basic output
-    print("Root position: ", epd)
+    print("Searched epd : ", epd)
     print("evalDecay    : ", evalDecay)
     print("Concurrency  : ", concurrency)
     print("Starting date: ", datetime.now().isoformat())
@@ -485,6 +491,7 @@ async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
     # create a ChessDB
     chessdb = ChessDB(
         concurrency=concurrency,
+        evalDecay=evalDecay,
         cursedWins=cursedWins,
         rootBoard=board.copy(),
     )
@@ -494,7 +501,7 @@ async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
         print("Search at depth ", depth)
         await chessdb.add_cdb_pv_positions(board.epd())
         print("  cdb PV len: ", chessdb.cdbPvToLeaf.get(board.epd(), 0), flush=True)
-        bestscore, pv = await chessdb.search(board, depth, evalDecay)
+        bestscore, pv = await chessdb.search(board, depth)
         if pv[-1] in ["checkmate", "draw", "invalid"]:
             pvlen = len(pv) - 1
             if pv[-1] == "checkmate":
@@ -543,6 +550,8 @@ async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
 
 
 if __name__ == "__main__":
+    import argparse
+
     freeze_support()
 
     argParser = argparse.ArgumentParser(
@@ -585,8 +594,10 @@ if __name__ == "__main__":
     args = argParser.parse_args()
 
     if args.san is not None:
+        import chess.pgn, io
+
         if args.san:
-            pgn = StringIO(args.san)
+            pgn = io.StringIO(args.san)
             game = chess.pgn.read_game(pgn)
             epd = game.board().epd() + " moves"
             for move in game.mainline_moves():
