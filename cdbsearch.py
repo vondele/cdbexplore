@@ -1,10 +1,6 @@
-import asyncio
-import requests
-import time
-import chess
-import sys
-import threading
-import concurrent.futures
+import argparse, sys, asyncio, requests, time, threading, concurrent.futures
+import chess, chess.pgn
+from io import StringIO
 from datetime import datetime, timedelta
 from multiprocessing import freeze_support
 
@@ -471,7 +467,7 @@ async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
     evalDecay = max(0, evalDecay)
 
     # basic output
-    print("Searched epd : ", epd)
+    print("Root position: ", epd)
     print("evalDecay    : ", evalDecay)
     print("Concurrency  : ", concurrency)
     print("Starting date: ", datetime.now().isoformat())
@@ -550,8 +546,6 @@ async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
 
 
 if __name__ == "__main__":
-    import argparse
-
     freeze_support()
 
     argParser = argparse.ArgumentParser(
@@ -594,10 +588,8 @@ if __name__ == "__main__":
     args = argParser.parse_args()
 
     if args.san is not None:
-        import chess.pgn, io
-
         if args.san:
-            pgn = io.StringIO(args.san)
+            pgn = StringIO(args.san)
             game = chess.pgn.read_game(pgn)
             epd = game.board().epd() + " moves"
             for move in game.mainline_moves():
