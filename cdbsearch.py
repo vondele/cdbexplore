@@ -142,7 +142,6 @@ class ChessDB:
             return ["invalid"]
         if depth == 0:
             return []
-        print(scored_db_moves)
         bestmove = sorted(
             [m for m in scored_db_moves.items() if m[0] != "depth"],
             key=lambda t: t[1],
@@ -529,8 +528,6 @@ async def cdbsearch(
         pvlen = len(pv) - 1 if pv[-1] in ["checkmate", "draw", "invalid"] else len(pv)
         print("  PV        : ", " ".join(pv[:-1]), end=" ", flush=True)
         if args.proveMates and pv[-1] == "checkmate" and pvlen > 1:
-            # mpv = await chessdb.extract_cached_PV(board.copy(), pvlen)
-            # _ = input(f"{mpv}")
             if await chessdb.pv_has_proven_mate(board.epd(), pv):
                 pv[-1] = "CHECKMATE" + (
                     f" (#{(pvlen+1)//2})" if bestscore > 0 else f" (#-{pvlen//2})"
