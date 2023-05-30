@@ -29,7 +29,7 @@ options:
   --evalDecay EVALDECAY
                         Depth decrease per cp eval-to-best. A small number will use a very narrow search, 0 will essentially just follow PV lines. A wide search will likely enqueue many positions. (default: 2)
   --cursedWins          Treat cursed wins as wins. (default: False)
-  --proveMates          Attempt to prove that mate PV lines have no better defense. Proven mates are indicated with "CHECKMATE" at the end of the PV, whereas unproven ones use "checkmate". (default: False)
+  --proveMates          Attempt to prove that mate PV lines have no better defence. Proven mates are indicated with "CHECKMATE" at the end of the PV, whereas unproven ones use "checkmate". (default: False)
 ``` 
 
 Sample output:

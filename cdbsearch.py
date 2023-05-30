@@ -135,7 +135,6 @@ class ChessDB:
 
     async def extract_cached_PV(self, epd, depth):
         """extract the PV line for epd from cache, to the specified depth"""
-        # @vondele: I was not quite sure whether to use board or epd as argument to extract_cached_PV
         board = chess.Board(epd)
         if (t := self.check_trivial_PV(board)) is not None:
             return t[1]
@@ -184,18 +183,22 @@ class ChessDB:
         for _ in [0, 1]:
             board.pop()
 
+        tasks = []
         # now we check if all the currently non-best moves also inevitably lead to the defender being mated
         for m in scored_db_moves:
             if m == "depth" or m == pv[0]:
                 # the move that is the first PV move was already checked
                 continue
+            # we schedule the check of all the possible defences in parallel
             board.push(chess.Move.from_uci(m))
-            # as these recursive calls likely return False anyway, we do not run them in parallel and rather wait for each move in turn
-            # @vondele: I think these we can actually run in parallel
             mpv = await self.extract_cached_PV(board.epd(), len(pv) - 2)
-            if not await self.pv_has_proven_mate(board.epd(), mpv):
-                return False
+            tasks.append(asyncio.create_task(self.pv_has_proven_mate(board.epd(), mpv)))
             board.pop()
+
+        # if any of the possible defences does _not_ lead to a mate, the proof breaks down
+        for pv_has_proven_mate in tasks:
+            if not await pv_has_proven_mate:
+                return False
 
         return True
 
@@ -607,7 +610,7 @@ if __name__ == "__main__":
     argParser.add_argument(
         "--proveMates",
         action="store_true",
-        help='Attempt to prove that mate PV lines have no better defense. Proven mates are indicated with "CHECKMATE" at the end of the PV, whereas unproven ones use "checkmate".',
+        help='Attempt to prove that mate PV lines have no better defence. Proven mates are indicated with "CHECKMATE" at the end of the PV, whereas unproven ones use "checkmate".',
     )
     args = argParser.parse_args()
 
