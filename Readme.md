@@ -14,7 +14,7 @@ Using some concurrency, fairly deep exploration is quickly possible.
 This is a command line program to explore a single position.
 
 ```
-usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins]
+usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--proveMates]
 
 Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position.
 
@@ -29,6 +29,7 @@ options:
   --evalDecay EVALDECAY
                         Depth decrease per cp eval-to-best. A small number will use a very narrow search, 0 will essentially just follow PV lines. A wide search will likely enqueue many positions. (default: 2)
   --cursedWins          Treat cursed wins as wins. (default: False)
+  --proveMates          Attempt to prove that mate PV lines have no better defense. Proven mates are indicated with "CHECKMATE" at the end of the PV, whereas unproven ones use "checkmate". (default: False)
 ``` 
 
 Sample output:
@@ -71,14 +72,38 @@ req. time  : Average time (in milliseconds) needed to get a cdb list of moves fo
 URL        : Link displaying the found PV in chessdb.
 ```
 
-Observe that `cdbsearch` is able to detect proven mate scores within cdb, and can help construct proofs for these. Once a proven mate line has been found, it is indicated by the PV ending in e.g. `CHECKMATE (#3)`, whereas `checkmate` simply indicates a PV line that ends in a checkmate, but in theory a better defence could exist.
+Sample output with `--proveMates`:
+
+```
+> python cdbsearch.py --epd "3r4/3N2kr/1p6/pBpn1p2/Q2PR1p1/P7/1P4P1/2q3K1 w - -" --depthLimit 1 --evalDecay 0 --proveMates
+Root position:  3r4/3N2kr/1p6/pBpn1p2/Q2PR1p1/P7/1P4P1/2q3K1 w - -
+evalDecay    :  0
+Concurrency  :  16
+Prove Mates  :  True
+Starting date:  2023-05-30T17:23:55.155562
+Search at depth  1
+  cdb PV len:  10
+  score     :  -29990
+  PV        :  g1f2 f5e4 a4b3 h7h1 b3c3 d5c3 b5f1 c1f4 f2e1 f4e3 CHECKMATE (#-5)
+  PV len    :  10
+  queryall  :  12894
+  bf        :  12894.00
+  inflight  :  5.74
+  chessdbq  :  5295
+  enqueued  :  0
+  unscored  :  0
+  date      :  2023-05-30T17:26:50.818800
+  total time:  0:02:55.66
+  req. time :  33
+  URL       :  https://chessdb.cn/queryc_en/?3r4/3N2kr/1p6/pBpn1p2/Q2PR1p1/P7/1P4P1/2q3K1_w_-_-_moves_g1f2_f5e4_a4b3_h7h1_b3c3_d5c3_b5f1_c1f4_f2e1_f4e3
+```
 
 ## `cdbbulksearch`
 
 This is a command line program to sequentially explore several positions.
 
 ```
-usage: cdbbulksearch.py [-h] [--pgnBegin PGNBEGIN] [--pgnEnd PGNEND] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--bulkConcurrency BULKCONCURRENCY] [--forever] [--reload] filename
+usage: cdbbulksearch.py [-h] [--pgnBegin PGNBEGIN] [--pgnEnd PGNEND] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--proveMates] [--bulkConcurrency BULKCONCURRENCY] [--forever] [--reload] filename
 
 Sequentially call cdbsearch for all the positions stored in a file.
 
@@ -96,6 +121,7 @@ options:
   --evalDecay EVALDECAY
                         Argument passed to cdbsearch. (default: 2)
   --cursedWins          Argument passed to cdbsearch. (default: False)
+  --proveMates          Argument passed to cdbsearch. (default: False)
   --bulkConcurrency BULKCONCURRENCY
                         Number of concurrent processes running cdbsearch. (default: 4)
   --forever             Pass positions from filename to cdbsearch in an infinite loop, increasing depthLimit by one after each completed cycle. (default: False)

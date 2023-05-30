@@ -462,7 +462,9 @@ class ChessDB:
         return bestscore, minicache[bestmove]
 
 
-async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
+async def cdbsearch(
+    epd, depthLimit, concurrency, evalDecay, cursedWins=False, proveMates=False
+):
     concurrency = max(1, concurrency)
     evalDecay = max(0, evalDecay)
 
@@ -470,6 +472,10 @@ async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
     print("Root position: ", epd)
     print("evalDecay    : ", evalDecay)
     print("Concurrency  : ", concurrency)
+    if cursedWins:
+        print("Cursed Wins  :  True")
+    if proveMates:
+        print("Prove Mates  :  True")
     print("Starting date: ", datetime.now().isoformat())
 
     # set initial board, including the moves provided within epd
@@ -498,25 +504,16 @@ async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
         await chessdb.add_cdb_pv_positions(board.epd())
         print("  cdb PV len: ", chessdb.cdbPvToLeaf.get(board.epd(), 0), flush=True)
         bestscore, pv = await chessdb.search(board, depth)
-        if pv[-1] in ["checkmate", "draw", "invalid"]:
-            pvlen = len(pv) - 1
-            if pv[-1] == "checkmate":
-                if await chessdb.pv_has_proven_mate(board.epd(), pv):
-                    pv[-1] = "CHECKMATE" + (
-                        ""
-                        if pvlen == 0
-                        else f" (#{(pvlen+1)//2})"
-                        if bestscore > 0
-                        else f" (#-{pvlen//2})"
-                    )
-
-        else:
-            pvlen = len(pv)
-        runtime = time.perf_counter() - chessdb.count_starttime
-        queryall = chessdb.count_queryall.get()
         print("  score     : ", bestscore)
-        print("  PV        : ", " ".join(pv))
-        print("  PV len    : ", pvlen)
+        pvlen = len(pv) - 1 if pv[-1] in ["checkmate", "draw", "invalid"] else len(pv)
+        print("  PV        : ", " ".join(pv[:-1]), end=" ", flush=True)
+        if args.proveMates and pv[-1] == "checkmate" and pvlen > 1:
+            if await chessdb.pv_has_proven_mate(board.epd(), pv):
+                pv[-1] = "CHECKMATE" + (
+                    f" (#{(pvlen+1)//2})" if bestscore > 0 else f" (#-{pvlen//2})"
+                )
+        print(f"{pv[-1]}\n  PV len    :  {pvlen}")
+        queryall = chessdb.count_queryall.get()
         if queryall:
             print("  queryall  : ", queryall)
             print(f"  bf        :  { queryall**(1/depth) :.2f}")
@@ -527,6 +524,7 @@ async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
             print("  enqueued  : ", chessdb.count_enqueued.get())
             print("  unscored  : ", chessdb.count_unscored.get())
             print("  date      : ", datetime.now().isoformat())
+            runtime = time.perf_counter() - chessdb.count_starttime
             timestr = str(timedelta(seconds=int(100 * runtime) / 100))
             print("  total time: ", timestr[: -4 if "." in timestr else None])
             print(
@@ -541,7 +539,7 @@ async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
         print("  URL       : ", url.replace(" ", "_"))
         print("", flush=True)
         depth += 1
-        if pv in [["CHECKMATE"], ["draw"], ["invalid"]]:  # nothing to be done
+        if pv in [["checkmate"], ["draw"], ["invalid"]]:  # nothing to be done
             break
 
 
@@ -585,6 +583,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Treat cursed wins as wins.",
     )
+    argParser.add_argument(
+        "--proveMates",
+        action="store_true",
+        help='Attempt to prove that mate PV lines have no better defense. Proven mates are indicated with "CHECKMATE" at the end of the PV, whereas unproven ones use "checkmate".',
+    )
     args = argParser.parse_args()
 
     if args.san is not None:
@@ -606,5 +609,6 @@ if __name__ == "__main__":
             concurrency=args.concurrency,
             evalDecay=args.evalDecay,
             cursedWins=args.cursedWins,
+            proveMates=args.proveMates,
         )
     )
