@@ -133,11 +133,25 @@ class ChessDB:
                 self.cdbPvToLeaf[board.epd()] = len(pv) - 1 - parsed
                 asyncio.ensure_future(self.queryall(board.epd()))
 
-    async def extract_cached_PV(self, epd, depth):
+    async def extract_cached_PV(self, board, depth):
         """extract the PV line for epd from cache, to the specified depth"""
         if (t := self.check_trivial_PV(board)) is not None:
-            return t
-        pass
+            return t[1]
+        scored_db_moves = await self.queryall(board.epd())
+        # @vondele: this check is not really needed for our purposes, but best to keep in ?
+        if scored_db_moves == {}:
+            return ["invalid"]
+        if depth == 0:
+            return []
+        print(scored_db_moves)
+        bestmove = sorted(
+            [m for m in scored_db_moves.items() if m[0] != "depth"],
+            key=lambda t: t[1],
+            reverse=True,
+        )[0][0]
+        local_board = board.copy()
+        local_board.push(chess.Move.from_uci(bestmove))
+        return [bestmove] + await self.extract_cached_PV(local_board, depth - 1)
 
     async def pv_has_proven_mate(self, epd, pv):
         """check if the PV line is a proven mate on cdb, and if not help prove it"""
@@ -194,10 +208,8 @@ class ChessDB:
         self.count_sumInflightRequests.inc(self.count_inflightRequests.get())
 
         # see if we can return this result from the TT
-        if not skipTT:
-            result = self.TT.get(epd)
-            if result is not None:
-                return result
+        if not skipTT and (result := self.TT.get(epd)) is not None:
+            return result
 
         # if uncached retrieve from chessdb
         self.count_uncached.inc()
@@ -518,6 +530,8 @@ async def cdbsearch(
         pvlen = len(pv) - 1 if pv[-1] in ["checkmate", "draw", "invalid"] else len(pv)
         print("  PV        : ", " ".join(pv[:-1]), end=" ", flush=True)
         if args.proveMates and pv[-1] == "checkmate" and pvlen > 1:
+            mpv = await chessdb.extract_cached_PV(board.copy(), pvlen)
+            _ = input(f"{mpv}")
             if await chessdb.pv_has_proven_mate(board.epd(), pv):
                 pv[-1] = "CHECKMATE" + (
                     f" (#{(pvlen+1)//2})" if bestscore > 0 else f" (#-{pvlen//2})"
