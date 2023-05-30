@@ -534,7 +534,7 @@ async def cdbsearch(
         pvlen = len(pv) - 1 if pv[-1] in ["checkmate", "draw", "invalid"] else len(pv)
         print("  PV        : ", " ".join(pv[:-1]), end=" ", flush=True)
         if args.proveMates and pv[-1] == "checkmate" and pvlen > 1:
-            if await chessdb.pv_has_proven_mate(board.epd(), pv):
+            if await chessdb.pv_has_proven_mate(board.copy(), pv):
                 pv[-1] = "CHECKMATE" + (
                     f" (#{(pvlen+1)//2})" if bestscore > 0 else f" (#-{pvlen//2})"
                 )
