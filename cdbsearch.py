@@ -133,11 +133,13 @@ class ChessDB:
                 self.cdbPvToLeaf[board.epd()] = len(pv) - 1 - parsed
                 asyncio.ensure_future(self.queryall(board.epd()))
 
-    async def extract_cached_PV(self, board, depth):
-        """extract the PV line for board position from cache, to the specified depth"""
+    async def extract_cached_PV(self, epd, depth):
+        """extract the PV line for epd from cache, to the specified depth"""
+        # @vondele: I was not quite sure whether to use board or epd as argument to extract_cached_PV
+        board = chess.Board(epd)
         if (t := self.check_trivial_PV(board)) is not None:
             return t[1]
-        scored_db_moves = await self.queryall(board.epd())
+        scored_db_moves = await self.queryall(epd)
         if scored_db_moves == {}:
             return ["invalid"]
         if depth == 0:
@@ -148,8 +150,7 @@ class ChessDB:
             reverse=True,
         )[0][0]
         board.push(chess.Move.from_uci(bestmove))
-        # we walk along a single PV line using the same board, so there is no need for a copy
-        return [bestmove] + await self.extract_cached_PV(board, depth - 1)
+        return [bestmove] + await self.extract_cached_PV(board.epd(), depth - 1)
 
     async def pv_has_proven_mate(self, epd, pv):
         """check if the PV line is a proven mate on cdb, and if not help prove it"""
@@ -191,7 +192,7 @@ class ChessDB:
             board.push(chess.Move.from_uci(m))
             # as these recursive calls likely return False anyway, we do not run them in parallel and rather wait for each move in turn
             # @vondele: I think these we can actually run in parallel
-            mpv = await self.extract_cached_PV(board.copy(), len(pv) - 2)
+            mpv = await self.extract_cached_PV(board.epd(), len(pv) - 2)
             if not await self.pv_has_proven_mate(board.epd(), mpv):
                 return False
             board.pop()
