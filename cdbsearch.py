@@ -133,6 +133,12 @@ class ChessDB:
                 self.cdbPvToLeaf[board.epd()] = len(pv) - 1 - parsed
                 asyncio.ensure_future(self.queryall(board.epd()))
 
+    async def extract_cached_PV(self, epd, depth):
+        """extract the PV line for epd from cache, to the specified depth"""
+        if (t := self.check_trivial_PV(board)) is not None:
+            return t
+        pass
+
     async def pv_has_proven_mate(self, epd, pv):
         """check if the PV line is a proven mate on cdb, and if not help prove it"""
         if not pv or pv[-1] != "checkmate":
@@ -324,18 +330,22 @@ class ChessDB:
         decay = delta // self.evalDecay if self.evalDecay != 0 else 10**6 * delta
         return depth + decay - 1 if score is not None else min(0, depth + decay - 2)
 
-    async def search(self, board, depth):
-        """returns (bestscore, pv) for current position stored in board"""
-
+    def check_trivial_PV(self, board):
         if board.is_checkmate():
             return -CDB_MATE, ["checkmate"]
-
         if (
             board.is_stalemate()
             or board.is_insufficient_material()
             or board.can_claim_draw()
         ):
             return 0, ["draw"]
+        return None
+
+    async def search(self, board, depth):
+        """returns (bestscore, pv) for current position stored in board"""
+
+        if (t := self.check_trivial_PV(board)) is not None:
+            return t
 
         # get current ranking
         scored_db_moves = await self.queryall(board.epd())
