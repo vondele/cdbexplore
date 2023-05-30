@@ -134,11 +134,10 @@ class ChessDB:
                 asyncio.ensure_future(self.queryall(board.epd()))
 
     async def extract_cached_PV(self, board, depth):
-        """extract the PV line for epd from cache, to the specified depth"""
+        """extract the PV line for board position from cache, to the specified depth"""
         if (t := self.check_trivial_PV(board)) is not None:
             return t[1]
         scored_db_moves = await self.queryall(board.epd())
-        # @vondele: this check is not really needed for our purposes, but best to keep in ?
         if scored_db_moves == {}:
             return ["invalid"]
         if depth == 0:
@@ -149,9 +148,9 @@ class ChessDB:
             key=lambda t: t[1],
             reverse=True,
         )[0][0]
-        local_board = board.copy()
-        local_board.push(chess.Move.from_uci(bestmove))
-        return [bestmove] + await self.extract_cached_PV(local_board, depth - 1)
+        board.push(chess.Move.from_uci(bestmove))
+        # we walk along a single PV line using the same board, so there is no need for a copy
+        return [bestmove] + await self.extract_cached_PV(board, depth - 1)
 
     async def pv_has_proven_mate(self, epd, pv):
         """check if the PV line is a proven mate on cdb, and if not help prove it"""
@@ -192,8 +191,8 @@ class ChessDB:
                 continue
             board.push(chess.Move.from_uci(m))
             # as these recursive calls likely return False anyway, we do not run them in parallel and rather wait for each move in turn
-            # @vondele: not sure about this line: is the depth guaranteed to be enough to find the checkmate node?
-            _, mpv = await self.search(board.copy(), len(pv) - 2)
+            # @vondele: I think these we can actually run in parallel
+            mpv = await self.extract_cached_PV(board.copy(), len(pv) - 2)
             if not await self.pv_has_proven_mate(board.epd(), mpv):
                 return False
             board.pop()
@@ -530,8 +529,8 @@ async def cdbsearch(
         pvlen = len(pv) - 1 if pv[-1] in ["checkmate", "draw", "invalid"] else len(pv)
         print("  PV        : ", " ".join(pv[:-1]), end=" ", flush=True)
         if args.proveMates and pv[-1] == "checkmate" and pvlen > 1:
-            mpv = await chessdb.extract_cached_PV(board.copy(), pvlen)
-            _ = input(f"{mpv}")
+            # mpv = await chessdb.extract_cached_PV(board.copy(), pvlen)
+            # _ = input(f"{mpv}")
             if await chessdb.pv_has_proven_mate(board.epd(), pv):
                 pv[-1] = "CHECKMATE" + (
                     f" (#{(pvlen+1)//2})" if bestscore > 0 else f" (#-{pvlen//2})"
