@@ -21,7 +21,7 @@ def wrapcdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins, proveMate
             )
         )
     except Exception as ex:
-        print(f' error: while searching {epd} caught exception "{ex}"')
+        print(f' error: while searching EPD "{epd}" caught exception "{ex}"')
     sys.stdout = old_stdout
     return mystdout.getvalue()
 
@@ -95,16 +95,16 @@ def load_epds(filename, pgnBegin=-1, pgnEnd=None):
 
 class TaskCounter:
     def __init__(self):
-        self.counter = 0
+        self._counter = 0
 
     def inc(self):
-        self.counter += 1
+        self._counter += 1
 
     def dec(self, fn):
-        self.counter -= 1
+        self._counter -= 1
 
     def get(self):
-        return self.counter
+        return self._counter
 
 
 if __name__ == "__main__":
@@ -198,8 +198,7 @@ if __name__ == "__main__":
     executor = concurrent.futures.ProcessPoolExecutor(max_workers=args.bulkConcurrency)
     print(f"Positions to be explored with concurrency {args.bulkConcurrency}.")
 
-    tasks = deque()
-    task = None
+    task, tasks = None, deque()
     taskCounter = TaskCounter()
     first = True
     epdIdx, epds = 0, []
@@ -213,9 +212,7 @@ if __name__ == "__main__":
                         epds = load_epds(args.filename, args.pgnBegin, args.pgnEnd)
                     except Exception:
                         if first:
-                            raise Exception(
-                                f"Error while trying to reload file {args.filename}."
-                            )
+                            raise
                         else:
                             print(
                                 f"Error while trying to reload file {args.filename}. Continue with old EPD list."

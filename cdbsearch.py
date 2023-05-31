@@ -1,4 +1,4 @@
-import argparse, sys, asyncio, requests, time, threading, concurrent.futures
+import argparse, asyncio, requests, time, threading, concurrent.futures
 import chess, chess.pgn
 from io import StringIO
 from datetime import datetime, timedelta
@@ -14,17 +14,17 @@ CDB_SPECIAL = 10000
 class AtomicTT:
     def __init__(self):
         self._lock = threading.Lock()
-        self.cache = {}
+        self._cache = {}
 
     def get(self, epd):
         with self._lock:
-            return self.cache.get(epd)
+            return self._cache.get(epd)
 
     def set(self, epd, result):
         with self._lock:
-            if epd not in self.cache or self.cache[epd]["depth"] <= result["depth"]:
-                self.cache[epd] = result
-            return self.cache[epd]
+            if epd not in self._cache or self._cache[epd]["depth"] <= result["depth"]:
+                self._cache[epd] = result
+            return self._cache[epd]
 
 
 class AtomicInteger:
@@ -82,15 +82,16 @@ class ChessDB:
         # a dictionary storing the distance to leaf for positions on cdb PVs
         self.cdbPvToLeaf = {}
 
-        # a semaphore is used to limit the number of concurrent accesses to the api
+        # a semaphore to limit the number of concurrent accesses to the API
         self.semaphoreWork = asyncio.Semaphore(self.concurrency)
-        # this list of semaphores is used to limit the number of concurrent tasks while exploring the search tree
-        self.semaphoreTree = []
 
-        # to do some of the blocking IO we use this thread pool, TODO look into aiohttp
+        # a thread pool to do some of the blocking IO (TODO: look into aiohttp)
         self.executorWork = concurrent.futures.ThreadPoolExecutor(
             max_workers=self.concurrency
         )
+
+        # a list of semaphores to limit the number of concurrent tasks on each level of the search tree
+        self.semaphoreTree = []
 
     def __apicall(self, url, timeout):
         """our blocking apicall, not to be called directly"""
@@ -104,8 +105,8 @@ class ChessDB:
         self.count_inflightRequests.dec()
         return content
 
-    async def __cdbapicall(self, action, timeout):
-        """co-routine to access the api"""
+    async def __cdbapicall(self, action, timeout=15):
+        """co-routine to access the API"""
         async with self.semaphoreWork:
             return await asyncio.get_running_loop().run_in_executor(
                 self.executorWork,
@@ -116,22 +117,17 @@ class ChessDB:
 
     async def add_cdb_pv_positions(self, epd):
         """query cdb for the PV of the position and create a dictionary containing these positions and their distance to the PV leaf for extensions during search"""
-        content = await self.__cdbapicall(
-            f"?action=querypv&board={epd}&json=1", timeout=15
-        )
+        content = await self.__cdbapicall(f"?action=querypv&board={epd}&json=1")
         if (
             content
-            and "status" in content
-            and content["status"] == "ok"
-            and "pv" in content
+            and content.get("status", None) == "ok"
+            and (pv := content.get("pv", None))
         ):
-            pv = content["pv"]
             self.cdbPvToLeaf[epd] = len(pv)
             board = chess.Board(epd)
             asyncio.ensure_future(self.queryall(board.epd()))
-            for parsed, m in enumerate(pv):
-                move = chess.Move.from_uci(m)
-                board.push(move)
+            for parsed, ucimove in enumerate(pv):
+                board.push(chess.Move.from_uci(ucimove))
                 self.cdbPvToLeaf[board.epd()] = len(pv) - 1 - parsed
                 asyncio.ensure_future(self.queryall(board.epd()))
 
@@ -145,7 +141,7 @@ class ChessDB:
         if depth == 0:
             return []
         bestmove = sorted(
-            [m for m in scored_db_moves.items() if m[0] != "depth"],
+            [t for t in scored_db_moves.items() if t[0] != "depth"],
             key=lambda t: t[1],
             reverse=True,
         )[0][0]
@@ -168,8 +164,7 @@ class ChessDB:
         if len(scored_db_moves) - 1 != len(list(board.legal_moves)):
             # there are unscored moves: help to construct a proof by querying all of them
             for move in board.legal_moves:
-                ucimove = move.uci()
-                if ucimove not in scored_db_moves:
+                if move.uci() not in scored_db_moves:
                     board.push(move)
                     asyncio.ensure_future(self.queryall(board.epd()))
                     self.count_unscored.inc()
@@ -177,8 +172,8 @@ class ChessDB:
             return False
 
         # we need to check if the _given_ PV is a correct mating line (once again just checking the defender's moves)
-        for m in pv[:2]:
-            board.push(chess.Move.from_uci(m))
+        for ucimove in pv[:2]:
+            board.push(chess.Move.from_uci(ucimove))
         if not await self.pv_has_proven_mate(board.copy(), pv[2:]):
             return False
         for _ in [0, 1]:
@@ -186,12 +181,9 @@ class ChessDB:
 
         tasks = []
         # now we check if all the currently non-best moves also inevitably lead to the defender being mated (in at most the claimed number of moves)
-        for m in scored_db_moves:
-            if m == "depth" or m == pv[0]:
-                # the move that is the first PV move was already checked
-                continue
-            # we schedule the check of all the alternative defending moves in parallel
-            board.push(chess.Move.from_uci(m))
+        for ucimove in [m for m in scored_db_moves if m != "depth" if m != pv[0]]:
+            # we schedule the proofs for all the alternative defending moves in parallel
+            board.push(chess.Move.from_uci(ucimove))
             # the list pv contains "checkmate", so mate must be delivered in len(pv) - 2 plies
             mpv = await self.obtain_PV(board.copy(), len(pv) - 2)
             tasks.append(
@@ -221,9 +213,8 @@ class ChessDB:
         self.count_uncached.inc()
 
         timeout = 5
-        found = False
+        found = enqueued = False
         first = True
-        enqueued = False
         result = {"depth": 0}
         lasterror = ""
 
@@ -271,14 +262,12 @@ class ChessDB:
                     lasterror = "Something went wrong with queue"
                     continue
 
-                # special case: position not available in cdb, e.g. in TB but with castling rights
-                # score all moves as draw, and let search figure it out
                 if content == {}:
+                    # the position is not available in cdb, e.g. in TB but with castling rights: score all moves as draw, and let search figure it out
                     found = True
                     board = chess.Board(epd)
                     for move in board.legal_moves:
-                        ucimove = move.uci()
-                        result[ucimove] = 0
+                        result[move.uci()] = 0
                     lasterror = "Position not queued"
                     continue
 
@@ -304,8 +293,8 @@ class ChessDB:
                                 # to stay in sync with cdb evals, we need to counter-act the bestscore off-set applied later on
                                 s += 1 if s >= 0 else -1
                         result[m["uci"]] = s
-                except:
-                    # we do not trust possibly partial move information received
+                except Exception:
+                    # we do not trust possibly partial move information
                     found = False
                     result = {"depth": 0}
                     lasterror = "Unexpected or malformed json reply"
@@ -327,20 +316,11 @@ class ChessDB:
 
     async def reprobe_PV(self, board, pv):
         """query all positions along the PV back to the root"""
-        local_board = board.copy()
-        for ucimove in pv:
-            try:
-                move = chess.Move.from_uci(ucimove)
-                local_board.push(move)
-            except Exception:
-                pass
-
-        while True:
-            asyncio.ensure_future(self.queryall(local_board.epd(), skipTT=True))
-            try:
-                local_board.pop()
-            except Exception:
-                break
+        for ucimove in pv[: -1 if pv[-1] in ["checkmate", "draw"] else None]:
+            board.push(chess.Move.from_uci(ucimove))
+        while board.move_stack:
+            asyncio.ensure_future(self.queryall(board.epd(), skipTT=True))
+            board.pop()
 
     def move_depth(self, bestscore, worstscore, score, depth):
         """returns depth - 1 for bestmove and negative values for bad moves, terminating their search; unscored moves are treated worse than worstmove, returning at most 0"""
@@ -372,13 +352,11 @@ class ChessDB:
 
         scoreCount = len(scored_db_moves) - 1  # number of scored moves for board
 
-        # also force a query for high depth moves that do not have a full list of scored moves,
-        # we use this to add newly scored moves to our TT
+        # force a query for high depth moves that do not have a full list of scored moves: we use this to add newly scored moves to our TT
         skipTT_db_moves = None
         if depth > 10:
             for move in board.legal_moves:
-                ucimove = move.uci()
-                if ucimove not in scored_db_moves:
+                if move.uci() not in scored_db_moves:
                     skipTT_db_moves = asyncio.create_task(
                         self.queryall(board.epd(), skipTT=True)
                     )
@@ -388,9 +366,7 @@ class ChessDB:
         bestmove = None
         worstscore = CDB_MATE + 1
 
-        for m, s in scored_db_moves.items():
-            if m == "depth":
-                continue
+        for m, s in [t for t in scored_db_moves.items() if t[0] != "depth"]:
             if s > bestscore:
                 bestscore = s
                 bestmove = m
@@ -402,8 +378,7 @@ class ChessDB:
 
         moves_to_search = 0
         for move in board.legal_moves:
-            ucimove = move.uci()
-            score = scored_db_moves.get(ucimove, None)
+            score = scored_db_moves.get(move.uci(), None)
             newdepth = self.move_depth(bestscore, worstscore, score, depth)
             if newdepth >= 0:
                 moves_to_search += 1
@@ -413,11 +388,10 @@ class ChessDB:
         tasks = {}
         tried_unscored = False
 
-        # guarantee sufficient length of the semaphoreTree list
+        # guarantee sufficient length of the semaphoreTree list, and limit the number of threads that can be created at each level of the search tree
         while len(self.semaphoreTree) < ply + 1:
             self.semaphoreTree.append(asyncio.Semaphore(2 * self.concurrency))
 
-        # we limit the number of tasks that can create new tasks at the next level for each level of the search tree
         async with self.semaphoreTree[ply]:
             for move in board.legal_moves:
                 ucimove = move.uci()
@@ -476,9 +450,7 @@ class ChessDB:
 
         # find bestmove and associated PV
         bestscore = -(CDB_MATE + 1)
-        for m, s in newly_scored_moves.items():
-            if m == "depth":
-                continue
+        for m, s in [t for t in newly_scored_moves.items() if t[0] != "depth"]:
             if s > bestscore or (
                 s == bestscore and len(minicache[m]) > len(minicache[bestmove])
             ):
@@ -486,7 +458,7 @@ class ChessDB:
                 bestmove = m
 
         if depth > 15:
-            await self.reprobe_PV(board, minicache[bestmove])
+            await self.reprobe_PV(board.copy(), minicache[bestmove])
 
         # for lines leading to mates, TBwins and cursed wins we do not use mini-max, but rather store the distance in ply
         # this means local evals for such nodes will always be in sync with cdb
@@ -520,9 +492,8 @@ async def cdbsearch(
         epdMoves = []
     epd = epd.strip()  # avoid leading and trailing spaces in URL below
     board = chess.Board(epd)
-    for m in epdMoves:
-        move = chess.Move.from_uci(m)
-        board.push(move)
+    for ucimove in epdMoves:
+        board.push(chess.Move.from_uci(ucimove))
 
     # create a ChessDB
     chessdb = ChessDB(
@@ -570,8 +541,7 @@ async def cdbsearch(
         if pvline:
             pvline = " moves " + pvline
         url = f"https://chessdb.cn/queryc_en/?{epd}{pvline}"
-        print("  URL       : ", url.replace(" ", "_"))
-        print("", flush=True)
+        print(f"  URL       :  {url.replace(' ', '_')}\n")
         depth += 1
         if pv in [["checkmate"], ["draw"], ["invalid"]]:  # nothing to be done
             break
@@ -579,7 +549,6 @@ async def cdbsearch(
 
 if __name__ == "__main__":
     freeze_support()
-
     argParser = argparse.ArgumentParser(
         description="Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -626,8 +595,7 @@ if __name__ == "__main__":
 
     if args.san is not None:
         if args.san:
-            pgn = StringIO(args.san)
-            game = chess.pgn.read_game(pgn)
+            game = chess.pgn.read_game(StringIO(args.san))
             epd = game.board().epd() + " moves"
             for move in game.mainline_moves():
                 epd += f" {move}"
