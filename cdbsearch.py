@@ -84,6 +84,8 @@ class ChessDB:
 
         # a semaphore is used to limit the number of concurrent accesses to the api
         self.semaphoreWork = asyncio.Semaphore(self.concurrency)
+        # this list of semaphores is used to limit the number of concurrent tasks while exploring the search tree
+        self.semaphoreTree = []
 
         # to do some of the blocking IO we use this thread pool, TODO look into aiohttp
         self.executorWork = concurrent.futures.ThreadPoolExecutor(
@@ -411,41 +413,47 @@ class ChessDB:
         tasks = {}
         tried_unscored = False
 
-        for move in board.legal_moves:
-            ucimove = move.uci()
-            score = scored_db_moves.get(ucimove, None)
-            newdepth = self.move_depth(bestscore, worstscore, score, depth)
+        # guarantee sufficient length of the semaphoreTree list
+        while len(self.semaphoreTree) < ply + 1:
+            self.semaphoreTree.append(asyncio.Semaphore(2 * self.concurrency))
 
-            # extension if the unique bestmove is the only move to be searched deeper or the position is in the cdb PV
-            if score == bestscore:
-                cdbPvToLeaf = self.cdbPvToLeaf.get(board.epd(), None)
-                if (moves_to_search == 1 and depth > 4) or (
-                    cdbPvToLeaf is not None and newdepth < cdbPvToLeaf
+        # we limit the number of tasks that can create new tasks at the next level for each level of the search tree
+        async with self.semaphoreTree[ply]:
+            for move in board.legal_moves:
+                ucimove = move.uci()
+                score = scored_db_moves.get(ucimove, None)
+                newdepth = self.move_depth(bestscore, worstscore, score, depth)
+
+                # extension if the unique bestmove is the only move to be searched deeper or the position is in the cdb PV
+                if score == bestscore:
+                    cdbPvToLeaf = self.cdbPvToLeaf.get(board.epd(), None)
+                    if (moves_to_search == 1 and depth > 4) or (
+                        cdbPvToLeaf is not None and newdepth < cdbPvToLeaf
+                    ):
+                        newdepth += 1
+
+                # schedule qualifying moves for deeper searches, at most 1 unscored move
+                # for sufficiently large depth and suffiently small scoreCount we possibly schedule an unscored move
+                if (newdepth >= 0 and not (score is None and tried_unscored)) or (
+                    score is None and not tried_unscored and depth > 15 + scoreCount
                 ):
-                    newdepth += 1
+                    board.push(move)
+                    tasks[ucimove] = asyncio.create_task(
+                        self.search(board.copy(), newdepth)
+                    )
+                    board.pop()
+                    if score is None:
+                        tried_unscored = True
+                        self.count_unscored.inc()
+                elif score is not None:
+                    newly_scored_moves[ucimove] = scored_db_moves[ucimove]
+                    minicache[ucimove] = [ucimove]
 
-            # schedule qualifying moves for deeper searches, at most 1 unscored move
-            # for sufficiently large depth and suffiently small scoreCount we possibly schedule an unscored move
-            if (newdepth >= 0 and not (score is None and tried_unscored)) or (
-                score is None and not tried_unscored and depth > 15 + scoreCount
-            ):
-                board.push(move)
-                tasks[ucimove] = asyncio.create_task(
-                    self.search(board.copy(), newdepth)
-                )
-                board.pop()
-                if score is None:
-                    tried_unscored = True
-                    self.count_unscored.inc()
-            elif score is not None:
-                newly_scored_moves[ucimove] = scored_db_moves[ucimove]
-                minicache[ucimove] = [ucimove]
-
-        # get the results from the futures
-        for ucimove, search in tasks.items():
-            s, pv = await search
-            newly_scored_moves[ucimove] = -s
-            minicache[ucimove] = [ucimove] + pv
+            # get the results from the futures
+            for ucimove, search in tasks.items():
+                s, pv = await search
+                newly_scored_moves[ucimove] = -s
+                minicache[ucimove] = [ucimove] + pv
 
         # add potentially newly scored moves, or moves we have not explored by search
         if skipTT_db_moves:
