@@ -1,10 +1,6 @@
-import asyncio
-import requests
-import time
-import chess
-import sys
-import threading
-import concurrent.futures
+import argparse, sys, asyncio, requests, time, threading, concurrent.futures
+import chess, chess.pgn
+from io import StringIO
 from datetime import datetime, timedelta
 from multiprocessing import freeze_support
 
@@ -137,6 +133,77 @@ class ChessDB:
                 self.cdbPvToLeaf[board.epd()] = len(pv) - 1 - parsed
                 asyncio.ensure_future(self.queryall(board.epd()))
 
+    async def obtain_PV(self, board, depth):
+        """obtain the PV line for position on board, to the specified depth"""
+        if (t := self.check_trivial_PV(board)) is not None:
+            return t[1]
+        scored_db_moves = await self.queryall(board.epd())
+        if scored_db_moves == {}:
+            return ["invalid"]
+        if depth == 0:
+            return []
+        bestmove = sorted(
+            [m for m in scored_db_moves.items() if m[0] != "depth"],
+            key=lambda t: t[1],
+            reverse=True,
+        )[0][0]
+        board.push(chess.Move.from_uci(bestmove))
+        # we walk along a single PV line with board, so no need to create a copy for the recursive call
+        return [bestmove] + await self.obtain_PV(board, depth - 1)
+
+    async def pv_has_proven_mate(self, board, pv):
+        """check if the PV line is a proven mate on cdb, and if not help prove it"""
+        if not pv or pv[-1] != "checkmate":
+            return False
+        if pv == ["checkmate"]:
+            return True
+        # now pv is a list of moves, with pv[-2] the mating move, and pv[-1] == "checkmate"
+        if len(pv) % 2 == 0:  # we just need to check the defender's moves
+            board.push(chess.Move.from_uci(pv[0]))
+            return await self.pv_has_proven_mate(board.copy(), pv[1:])
+
+        scored_db_moves = await self.queryall(board.epd())
+        if len(scored_db_moves) - 1 != len(list(board.legal_moves)):
+            # there are unscored moves: help to construct a proof by querying all of them
+            for move in board.legal_moves:
+                ucimove = move.uci()
+                if ucimove not in scored_db_moves:
+                    board.push(move)
+                    asyncio.ensure_future(self.queryall(board.epd()))
+                    self.count_unscored.inc()
+                    board.pop()
+            return False
+
+        # we need to check if the _given_ PV is a correct mating line (once again just checking the defender's moves)
+        for m in pv[:2]:
+            board.push(chess.Move.from_uci(m))
+        if not await self.pv_has_proven_mate(board.copy(), pv[2:]):
+            return False
+        for _ in [0, 1]:
+            board.pop()
+
+        tasks = []
+        # now we check if all the currently non-best moves also inevitably lead to the defender being mated (in at most the claimed number of moves)
+        for m in scored_db_moves:
+            if m == "depth" or m == pv[0]:
+                # the move that is the first PV move was already checked
+                continue
+            # we schedule the check of all the alternative defending moves in parallel
+            board.push(chess.Move.from_uci(m))
+            # the list pv contains "checkmate", so mate must be delivered in len(pv) - 2 plies
+            mpv = await self.obtain_PV(board.copy(), len(pv) - 2)
+            tasks.append(
+                asyncio.create_task(self.pv_has_proven_mate(board.copy(), mpv))
+            )
+            board.pop()
+
+        # if any of the possible defences does _not_ lead to a mate, the proof breaks down
+        for pv_has_proven_mate in tasks:
+            if not await pv_has_proven_mate:
+                return False
+
+        return True
+
     async def queryall(self, epd, skipTT=False):
         """query chessdb until scored moves come back"""
 
@@ -145,10 +212,8 @@ class ChessDB:
         self.count_sumInflightRequests.inc(self.count_inflightRequests.get())
 
         # see if we can return this result from the TT
-        if not skipTT:
-            result = self.TT.get(epd)
-            if result is not None:
-                return result
+        if not skipTT and (result := self.TT.get(epd)) is not None:
+            return result
 
         # if uncached retrieve from chessdb
         self.count_uncached.inc()
@@ -281,20 +346,24 @@ class ChessDB:
         decay = delta // self.evalDecay if self.evalDecay != 0 else 10**6 * delta
         return depth + decay - 1 if score is not None else min(0, depth + decay - 2)
 
-    async def search(self, board, depth):
-        """returns (bestscore, pv) for current position stored in board"""
-
+    def check_trivial_PV(self, board):
         if board.is_checkmate():
             return -CDB_MATE, ["checkmate"]
-
         if (
             board.is_stalemate()
             or board.is_insufficient_material()
             or board.can_claim_draw()
         ):
             return 0, ["draw"]
+        return None
 
-        # get current ranking, use an executor to limit total requests in flight
+    async def search(self, board, depth):
+        """returns (bestscore, pv) for current position stored in board"""
+
+        if (t := self.check_trivial_PV(board)) is not None:
+            return t
+
+        # get current ranking
         scored_db_moves = await self.queryall(board.epd())
         if scored_db_moves == {}:
             return 0, ["invalid"]
@@ -419,14 +488,20 @@ class ChessDB:
         return bestscore, minicache[bestmove]
 
 
-async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
+async def cdbsearch(
+    epd, depthLimit, concurrency, evalDecay, cursedWins=False, proveMates=False
+):
     concurrency = max(1, concurrency)
     evalDecay = max(0, evalDecay)
 
     # basic output
-    print("Searched epd : ", epd)
+    print("Root position: ", epd)
     print("evalDecay    : ", evalDecay)
     print("Concurrency  : ", concurrency)
+    if cursedWins:
+        print("Cursed Wins  :  True")
+    if proveMates:
+        print("Prove Mates  :  True")
     print("Starting date: ", datetime.now().isoformat())
 
     # set initial board, including the moves provided within epd
@@ -455,14 +530,16 @@ async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
         await chessdb.add_cdb_pv_positions(board.epd())
         print("  cdb PV len: ", chessdb.cdbPvToLeaf.get(board.epd(), 0), flush=True)
         bestscore, pv = await chessdb.search(board, depth)
-        runtime = time.perf_counter() - chessdb.count_starttime
-        queryall = chessdb.count_queryall.get()
         print("  score     : ", bestscore)
-        print("  PV        : ", " ".join(pv))
-        print(
-            "  PV len    : ",
-            len(pv) - (1 if pv[-1] in ["checkmate", "draw", "invalid"] else 0),
-        )
+        pvlen = len(pv) - 1 if pv[-1] in ["checkmate", "draw", "invalid"] else len(pv)
+        print("  PV        : ", " ".join(pv[:-1]), end=" ", flush=True)
+        if proveMates and pv[-1] == "checkmate" and pvlen:
+            if await chessdb.pv_has_proven_mate(board.copy(), pv):
+                pv[-1] = "CHECKMATE" + (
+                    f" (#{(pvlen+1)//2})" if bestscore > 0 else f" (#-{pvlen//2})"
+                )
+        print(f"{pv[-1]}\n  PV len    :  {pvlen}")
+        queryall = chessdb.count_queryall.get()
         if queryall:
             print("  queryall  : ", queryall)
             print(f"  bf        :  { queryall**(1/depth) :.2f}")
@@ -473,6 +550,7 @@ async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
             print("  enqueued  : ", chessdb.count_enqueued.get())
             print("  unscored  : ", chessdb.count_unscored.get())
             print("  date      : ", datetime.now().isoformat())
+            runtime = time.perf_counter() - chessdb.count_starttime
             timestr = str(timedelta(seconds=int(100 * runtime) / 100))
             print("  total time: ", timestr[: -4 if "." in timestr else None])
             print(
@@ -480,9 +558,7 @@ async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
                 int(1000 * runtime / chessdb.count_uncached.get()),
             )
 
-        pvline = " ".join(
-            epdMoves + pv[: -1 if pv[-1] in ["checkmate", "draw", "invalid"] else None]
-        )
+        pvline = " ".join(epdMoves + pv[:pvlen])
         if pvline:
             pvline = " moves " + pvline
         url = f"https://chessdb.cn/queryc_en/?{epd}{pvline}"
@@ -494,8 +570,6 @@ async def cdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
 
 
 if __name__ == "__main__":
-    import argparse
-
     freeze_support()
 
     argParser = argparse.ArgumentParser(
@@ -535,13 +609,16 @@ if __name__ == "__main__":
         action="store_true",
         help="Treat cursed wins as wins.",
     )
+    argParser.add_argument(
+        "--proveMates",
+        action="store_true",
+        help='Attempt to prove that mate PV lines have no better defence. Proven mates are indicated with "CHECKMATE" at the end of the PV, whereas unproven ones use "checkmate".',
+    )
     args = argParser.parse_args()
 
     if args.san is not None:
-        import chess.pgn, io
-
         if args.san:
-            pgn = io.StringIO(args.san)
+            pgn = StringIO(args.san)
             game = chess.pgn.read_game(pgn)
             epd = game.board().epd() + " moves"
             for move in game.mainline_moves():
@@ -558,5 +635,6 @@ if __name__ == "__main__":
             concurrency=args.concurrency,
             evalDecay=args.evalDecay,
             cursedWins=args.cursedWins,
+            proveMates=args.proveMates,
         )
     )
