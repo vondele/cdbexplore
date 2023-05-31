@@ -6,7 +6,7 @@ from multiprocessing import freeze_support, active_children
 from collections import deque
 
 
-def wrapcdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
+def wrapcdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins, proveMates):
     old_stdout = sys.stdout
     sys.stdout = mystdout = StringIO()
     try:
@@ -17,6 +17,7 @@ def wrapcdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins=False):
                 concurrency=concurrency,
                 evalDecay=evalDecay,
                 cursedWins=cursedWins,
+                proveMates=proveMates,
             )
         )
     except Exception as ex:
@@ -151,6 +152,11 @@ if __name__ == "__main__":
         help="Argument passed to cdbsearch.",
     )
     argParser.add_argument(
+        "--proveMates",
+        action="store_true",
+        help="Argument passed to cdbsearch.",
+    )
+    argParser.add_argument(
         "--bulkConcurrency",
         help="Number of concurrent processes running cdbsearch.",
         type=int,
@@ -233,6 +239,7 @@ if __name__ == "__main__":
                     concurrency=args.concurrency,
                     evalDecay=args.evalDecay,
                     cursedWins=args.cursedWins,
+                    proveMates=args.proveMates,
                 )
                 taskCounter.inc()
                 future.add_done_callback(taskCounter.dec)
