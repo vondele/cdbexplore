@@ -54,8 +54,7 @@ class ChessDB:
     def __init__(
         self, concurrency, evalDecay, cursedWins=False, rootBoard=chess.Board()
     ):
-        # user defined parameters
-        self.concurrency = concurrency
+        # some user defined parameters
         self.evalDecay = evalDecay
         self.cursedWins = cursedWins
 
@@ -83,15 +82,19 @@ class ChessDB:
         self.cdbPvToLeaf = {}
 
         # a semaphore to limit the number of concurrent accesses to the API
-        self.semaphoreWork = asyncio.Semaphore(self.concurrency)
+        self.semaphoreWork = asyncio.Semaphore(concurrency)
 
         # a thread pool to do some of the blocking IO (TODO: look into aiohttp)
         self.executorWork = concurrent.futures.ThreadPoolExecutor(
-            max_workers=self.concurrency
+            max_workers=concurrency
         )
 
-        # a list of semaphores to limit the number of concurrent tasks on each level of the search tree
-        self.semaphoreTree = []
+        # we use a list of semaphores to limit the number of concurrent tasks on each level of the search tree
+        self.semaphoreTreeMaxLevel = 255  # the deepest level of the tree that we guarantee a unique semaphore for
+        self.semaphoreTree = [
+            asyncio.Semaphore(2 * concurrency)
+            for _ in range(self.semaphoreTreeMaxLevel + 1)
+        ]
 
     def __apicall(self, url, timeout):
         """our blocking apicall, not to be called directly"""
@@ -373,9 +376,6 @@ class ChessDB:
             if s < worstscore:
                 worstscore = s
 
-        # ply stores the level of the search tree we are in, i.e. how many plies we are away from rootBoard
-        ply = len(board.move_stack) - len(self.rootBoard.move_stack)
-
         moves_to_search = 0
         for move in board.legal_moves:
             score = scored_db_moves.get(move.uci(), None)
@@ -388,11 +388,11 @@ class ChessDB:
         tasks = {}
         tried_unscored = False
 
-        # guarantee sufficient length of the semaphoreTree list, and limit the number of threads that can be created at each level of the search tree
-        while len(self.semaphoreTree) < ply + 1:
-            self.semaphoreTree.append(asyncio.Semaphore(2 * self.concurrency))
+        # ply stores the level of the search tree we are in, i.e. how many plies we are away from rootBoard
+        ply = len(board.move_stack) - len(self.rootBoard.move_stack)
 
-        async with self.semaphoreTree[ply]:
+        # at each level of the search tree we use a semaphore to limit the number of threads that can be created
+        async with self.semaphoreTree[min(ply, self.semaphoreTreeMaxLevel)]:
             for move in board.legal_moves:
                 ucimove = move.uci()
                 score = scored_db_moves.get(ucimove, None)
