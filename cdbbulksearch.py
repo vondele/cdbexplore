@@ -32,7 +32,10 @@ def load_epds(filename, pgnBegin=-1, pgnEnd=None):
     metalist = []
     if isPGN:
         pgn = open(args.filename)
-        while game := chess.pgn.read_game(pgn):
+        while True:
+            game = chess.pgn.read_game(pgn)
+            if game is None:
+                break
             metalist.append(game)
         print(f"Loaded {len(metalist)} (opening) lines from file {args.filename}.")
     else:
