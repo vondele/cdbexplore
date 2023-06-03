@@ -1,6 +1,7 @@
 import argparse, sys, signal, asyncio, concurrent.futures
 import chess, chess.pgn
 import cdbsearch
+import random
 from io import StringIO
 from multiprocessing import freeze_support, active_children
 from collections import deque
@@ -160,6 +161,11 @@ if __name__ == "__main__":
         help="Argument passed to cdbsearch.",
     )
     argParser.add_argument(
+        "--shuffle",
+        action="store_true",
+        help="Shuffle the positions to be searched randomly.",
+    )
+    argParser.add_argument(
         "--bulkConcurrency",
         help="Number of concurrent processes running cdbsearch.",
         type=int,
@@ -213,6 +219,8 @@ if __name__ == "__main__":
                 if first or args.reload:
                     try:
                         epds = load_epds(args.filename, args.pgnBegin, args.pgnEnd)
+                        if args.shuffle:
+                            random.shuffle(epds)
                     except Exception:
                         if first:
                             raise
