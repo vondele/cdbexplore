@@ -118,11 +118,8 @@ class ChessDB:
     async def add_cdb_pv_positions(self, epd):
         """query cdb for the PV of the position and create a dictionary containing these positions and their distance to the PV leaf for extensions during search"""
         content = await self.__cdbapicall(f"?action=querypv&board={epd}&json=1")
-        if (
-            content
-            and content.get("status", None) == "ok"
-            and (pv := content.get("pv", None))
-        ):
+        if content and content.get("status", None) == "ok" and "pv" in content:
+            pv = content["pv"]
             self.cdbPvToLeaf[epd] = len(pv)
             board = chess.Board(epd)
             asyncio.ensure_future(self.queryall(board.epd()))
@@ -133,7 +130,8 @@ class ChessDB:
 
     async def obtain_PV(self, board, depth):
         """obtain the PV line for position on board, to the specified depth"""
-        if (t := self.check_trivial_PV(board)) is not None:
+        t = self.check_trivial_PV(board)
+        if t is not None:
             return t[1]
         scored_db_moves = await self.queryall(board.epd())
         if scored_db_moves == {}:
@@ -206,8 +204,10 @@ class ChessDB:
         self.count_sumInflightRequests.inc(self.count_inflightRequests.get())
 
         # see if we can return this result from the TT
-        if not skipTT and (result := self.TT.get(epd)) is not None:
-            return result
+        if not skipTT:
+            result = self.TT.get(epd)
+            if result is not None:
+                return result
 
         # if uncached retrieve from chessdb
         self.count_uncached.inc()
@@ -342,7 +342,8 @@ class ChessDB:
     async def search(self, board, depth):
         """returns (bestscore, pv) for current position stored in board"""
 
-        if (t := self.check_trivial_PV(board)) is not None:
+        t = self.check_trivial_PV(board)
+        if t is not None:
             return t
 
         # get current ranking
