@@ -69,6 +69,8 @@ class ChessDB:
         self.count_unscored = AtomicInteger()
         self.count_inflightRequests = AtomicInteger()
         self.count_sumInflightRequests = AtomicInteger()
+        self.count_inflightUncached = AtomicInteger()
+        self.count_sumInflightUncached = AtomicInteger()
 
         # for timing output
         self.count_starttime = time.perf_counter()
@@ -201,16 +203,17 @@ class ChessDB:
 
         # book keeping of calls and average in flight requests.
         self.count_queryall.inc()
-        self.count_sumInflightRequests.inc(self.count_inflightRequests.get())
 
-        # see if we can return this result from the TT
+        # see if we can return this result from the TT, else retrieve from chessdb
         if not skipTT:
             result = self.TT.get(epd)
             if result is not None:
                 return result
 
-        # if uncached retrieve from chessdb
         self.count_uncached.inc()
+        self.count_sumInflightRequests.inc(self.count_inflightRequests.get())
+        self.count_inflightUncached.inc()
+        self.count_sumInflightUncached.inc(self.count_inflightUncached.get())
 
         timeout = 5
         found = enqueued = False
@@ -312,6 +315,7 @@ class ChessDB:
                 continue
 
         # set and return a possibly even deeper result
+        self.count_inflightUncached.dec()
         return self.TT.set(epd, result)
 
     async def reprobe_PV(self, board, pv):
@@ -391,7 +395,7 @@ class ChessDB:
 
         # guarantee sufficient length of the semaphoreTree list, and limit the number of threads that can be created at each level of the search tree
         while len(self.semaphoreTree) < ply + 1:
-            self.semaphoreTree.append(asyncio.Semaphore(2 * self.concurrency))
+            self.semaphoreTree.append(asyncio.Semaphore(4 * self.concurrency))
 
         async with self.semaphoreTree[ply]:
             for move in board.legal_moves:
@@ -519,14 +523,19 @@ async def cdbsearch(
                     f" (#{(pvlen+1)//2})" if bestscore > 0 else f" (#-{pvlen//2})"
                 )
         print(f"{pv[-1]}\n  PV len    :  {pvlen}")
+        print(f"  max ply   :  {len(chessdb.semaphoreTree) - 1}")
         queryall = chessdb.count_queryall.get()
+        uncached = chessdb.count_uncached.get()
         if queryall:
             print("  queryall  : ", queryall)
             print(f"  bf        :  { queryall**(1/depth) :.2f}")
             print(
-                f"  inflight  : { chessdb.count_sumInflightRequests.get() / queryall : .2f}"
+                f"  inflightR : { chessdb.count_sumInflightRequests.get() / max(uncached, 1) : .2f}"
             )
-            print("  chessdbq  : ", chessdb.count_uncached.get())
+            print(
+                f"  inflightQ : { chessdb.count_sumInflightUncached.get() / max(uncached, 1) : .2f}"
+            )
+            print("  chessdbq  : ", uncached)
             print("  enqueued  : ", chessdb.count_enqueued.get())
             print("  unscored  : ", chessdb.count_unscored.get())
             print("  date      : ", datetime.now().isoformat())
@@ -534,7 +543,7 @@ async def cdbsearch(
             timestr = str(timedelta(seconds=int(100 * runtime) / 100))
             print("  total time: ", timestr[: -4 if "." in timestr else None])
             print(
-                "  req. time : ",
+                "  cdb time  : ",
                 int(1000 * runtime / chessdb.count_uncached.get()),
             )
 
