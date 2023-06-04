@@ -10,6 +10,12 @@ CDB_TBWIN = 25000
 CDB_CURSED = 20000
 CDB_SPECIAL = 10000
 
+# some depth constants that trigger certain events in search
+depthForceQuery = 10  # force queryall if unscored moves exist and depths exceeds this
+depthAllowExts = 4  # allow extension of the unique bestmove if depth exceeds this
+depthUnscored = 25  # score an unscored move if depth - scoreCount exceeds this
+depthReprobePV = 15  # call reprobe_PV when depth exceeds this
+
 
 class AtomicTT:
     def __init__(self):
@@ -357,9 +363,9 @@ class ChessDB:
 
         scoreCount = len(scored_db_moves) - 1  # number of scored moves for board
 
-        # force a query for high depth moves that do not have a full list of scored moves: we use this to add newly scored moves to our TT
+        # force a query for high depth nodes that do not have a full list of scored moves: we use this to add newly scored moves to our TT
         skipTT_db_moves = None
-        if depth > 10:
+        if depth > depthForceQuery:
             for move in board.legal_moves:
                 if move.uci() not in scored_db_moves:
                     skipTT_db_moves = asyncio.create_task(
@@ -406,7 +412,7 @@ class ChessDB:
                 # extension if the unique bestmove is the only move to be searched deeper or the position is in the cdb PV
                 if score == bestscore:
                     cdbPvToLeaf = self.cdbPvToLeaf.get(board.epd(), None)
-                    if (moves_to_search == 1 and depth > 4) or (
+                    if (moves_to_search == 1 and depth > depthAllowExts) or (
                         cdbPvToLeaf is not None and newdepth < cdbPvToLeaf
                     ):
                         newdepth += 1
@@ -414,7 +420,9 @@ class ChessDB:
                 # schedule qualifying moves for deeper searches, at most 1 unscored move
                 # for sufficiently large depth and suffiently small scoreCount we possibly schedule an unscored move
                 if (newdepth >= 0 and not (score is None and tried_unscored)) or (
-                    score is None and not tried_unscored and depth > 15 + scoreCount
+                    score is None
+                    and not tried_unscored
+                    and depth - scoreCount > depthUnscored
                 ):
                     board.push(move)
                     tasks[ucimove] = asyncio.create_task(
@@ -462,7 +470,7 @@ class ChessDB:
                 bestscore = s
                 bestmove = m
 
-        if depth > 15:
+        if depth > depthReprobePV:
             await self.reprobe_PV(board.copy(), minicache[bestmove])
 
         # for lines leading to mates, TBwins and cursed wins we do not use mini-max, but rather store the distance in ply
