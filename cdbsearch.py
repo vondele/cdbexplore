@@ -77,6 +77,8 @@ class ChessDB:
         self.count_sumInflightRequests = AtomicInteger()
         self.count_inflightUncached = AtomicInteger()
         self.count_sumInflightUncached = AtomicInteger()
+        self.count_reprobeQueryall = AtomicInteger()
+        self.count_reprobeQueryall2 = AtomicInteger()
 
         # for timing output
         self.count_starttime = time.perf_counter()
@@ -325,12 +327,18 @@ class ChessDB:
         return self.TT.set(epd, result)
 
     async def reprobe_PV(self, board, pv):
-        """query all positions along the PV back to the root"""
-        for ucimove in pv[: -1 if pv[-1] in ["checkmate", "draw"] else None]:
+        """query all positions in the given PV: from leaf to parent of board"""
+        pvlen = len(pv) - 1 if pv[-1] in ["checkmate", "draw"] else len(pv)
+        self.count_reprobeQueryall.inc(len(board.move_stack))
+        self.count_reprobeQueryall2.inc(min(len(board.move_stack), pvlen + 2))
+        for ucimove in pv[:pvlen]:
             board.push(chess.Move.from_uci(ucimove))
-        while board.move_stack:
+        for _ in range(pvlen + 2):
             asyncio.ensure_future(self.queryall(board.epd(), skipTT=True))
-            board.pop()
+            if board.move_stack:
+                board.pop()
+            else:
+                break
 
     def move_depth(self, bestscore, worstscore, score, depth):
         """returns depth - 1 for bestmove and negative values for bad moves, terminating their search; unscored moves are treated worse than worstmove, returning at most 0"""
@@ -536,6 +544,8 @@ async def cdbsearch(
         uncached = chessdb.count_uncached.get()
         if queryall:
             print("  queryall  : ", queryall)
+            print("  reprobe queryall  : ", chessdb.count_reprobeQueryall.get())
+            print("  reprobe queryall2 : ", chessdb.count_reprobeQueryall2.get())
             print(f"  bf        :  { queryall**(1/depth) :.2f}")
             print(
                 f"  inflightR : { chessdb.count_sumInflightRequests.get() / max(uncached, 1) : .2f}"
