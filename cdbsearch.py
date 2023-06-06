@@ -383,9 +383,6 @@ class ChessDB:
             if s < worstscore:
                 worstscore = s
 
-        # ply stores the level of the search tree we are in, i.e. how many plies we are away from rootBoard
-        ply = len(board.move_stack) - len(self.rootBoard.move_stack)
-
         moves_to_search = 0
         for move in board.legal_moves:
             score = scored_db_moves.get(move.uci(), None)
@@ -398,11 +395,14 @@ class ChessDB:
         tasks = {}
         tried_unscored = False
 
+        # the level of the search tree we are in, i.e. how many plies we are away from rootBoard
+        level = len(board.move_stack) - len(self.rootBoard.move_stack)
+
         # guarantee sufficient length of the semaphoreTree list, and limit the number of threads that can be created at each level of the search tree
-        while len(self.semaphoreTree) < ply + 1:
+        while len(self.semaphoreTree) < level + 1:
             self.semaphoreTree.append(asyncio.Semaphore(4 * self.concurrency))
 
-        async with self.semaphoreTree[ply]:
+        async with self.semaphoreTree[level]:
             for move in board.legal_moves:
                 ucimove = move.uci()
                 score = scored_db_moves.get(ucimove, None)
@@ -530,7 +530,7 @@ async def cdbsearch(
                     f" (#{(pvlen+1)//2})" if bestscore > 0 else f" (#-{pvlen//2})"
                 )
         print(f"{pv[-1]}\n  PV len    :  {pvlen}")
-        print(f"  max ply   :  {len(chessdb.semaphoreTree) - 1}")
+        print(f"  max ply   :  {len(chessdb.semaphoreTree)}")
         queryall = chessdb.count_queryall.get()
         uncached = chessdb.count_uncached.get()
         if queryall:

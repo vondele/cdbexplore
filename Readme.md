@@ -62,7 +62,7 @@ cdb PV len : Current length of the PV for this position in cdb in plies.
 score      : The standard minimax score found, not using the decay that cdb implements.
 PV         : Best line found.
 PV len     : Length of this PV line in plies.
-max ply    : deepest line searched so far
+max ply    : Length of the deepest line searched so far.
 queryall   : Number of positions visited in the search tree, with results provided by cdb or the local cache.
 bf         : Branching factor q^(1/d) computed from queryall q and depth d.
 inflightR  : Number of concurrent http requests made to cdb on average.
