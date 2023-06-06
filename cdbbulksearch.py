@@ -133,6 +133,11 @@ if __name__ == "__main__":
         default=None,
     )
     argParser.add_argument(
+        "--shuffle",
+        action="store_true",
+        help="Shuffle the positions to be searched randomly.",
+    )
+    argParser.add_argument(
         "--depthLimit",
         help="Argument passed to cdbsearch.",
         type=int,
@@ -159,11 +164,6 @@ if __name__ == "__main__":
         "--proveMates",
         action="store_true",
         help="Argument passed to cdbsearch.",
-    )
-    argParser.add_argument(
-        "--shuffle",
-        action="store_true",
-        help="Shuffle the positions to be searched randomly.",
     )
     argParser.add_argument(
         "--bulkConcurrency",
