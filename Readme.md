@@ -14,7 +14,7 @@ Using some concurrency, fairly deep exploration is quickly possible.
 This is a command line program to explore a single position.
 
 ```
-usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--proveMates]
+usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--proveMates] [--user USER]
 
 Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position.
 
@@ -30,6 +30,7 @@ options:
                         Depth decrease per cp eval-to-best. A small number will use a very narrow search, 0 will essentially just follow PV lines. A wide search will likely enqueue many positions. (default: 2)
   --cursedWins          Treat cursed wins as wins. (default: False)
   --proveMates          Attempt to prove that mate PV lines have no better defence. Proven mates are indicated with "CHECKMATE" at the end of the PV, whereas unproven ones use "checkmate". (default: False)
+  --user USER           Add this username to the http user-agent header. (default: None)
 ``` 
 
 Sample output:
@@ -109,7 +110,7 @@ Search at depth  1
 This is a command line program to sequentially explore several positions.
 
 ```
-usage: cdbbulksearch.py [-h] [--pgnBegin PGNBEGIN] [--pgnEnd PGNEND] [--shuffle] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--proveMates] [--bulkConcurrency BULKCONCURRENCY] [--forever] [--reload] filename
+usage: cdbbulksearch.py [-h] [--pgnBegin PGNBEGIN] [--pgnEnd PGNEND] [--shuffle] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--proveMates] [--user USER] [--bulkConcurrency BULKCONCURRENCY] [--forever] [--reload] filename
 
 Sequentially call cdbsearch for all the positions stored in a file.
 
@@ -129,6 +130,7 @@ options:
                         Argument passed to cdbsearch. (default: 2)
   --cursedWins          Argument passed to cdbsearch. (default: False)
   --proveMates          Argument passed to cdbsearch. (default: False)
+  --user USER           Argument passed to cdbsearch. (default: None)
   --bulkConcurrency BULKCONCURRENCY
                         Number of concurrent processes running cdbsearch. (default: 4)
   --forever             Pass positions from filename to cdbsearch in an infinite loop, increasing depthLimit by one after each completed cycle. (default: False)
