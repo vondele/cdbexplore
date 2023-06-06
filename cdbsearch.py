@@ -146,11 +146,10 @@ class ChessDB:
             return ["invalid"]
         if depth == 0:
             return []
-        bestmove = sorted(
+        bestmove, _ = max(
             [t for t in scored_db_moves.items() if t[0] != "depth"],
             key=lambda t: t[1],
-            reverse=True,
-        )[0][0]
+        )
         board.push(chess.Move.from_uci(bestmove))
         # we walk along a single PV line with board, so no need to create a copy for the recursive call
         return [bestmove] + await self.obtain_PV(board, depth - 1)
