@@ -58,12 +58,18 @@ class AtomicInteger:
 
 class ChessDB:
     def __init__(
-        self, concurrency, evalDecay, cursedWins=False, rootBoard=chess.Board()
+        self,
+        concurrency,
+        evalDecay,
+        cursedWins=False,
+        rootBoard=chess.Board(),
+        user=None,
     ):
         # user defined parameters
         self.concurrency = concurrency
         self.evalDecay = evalDecay
         self.cursedWins = cursedWins
+        self.user = "" if user is None else str(user)
 
         # the root position under which the tree will be built
         self.rootBoard = rootBoard
@@ -107,7 +113,11 @@ class ChessDB:
         """our blocking apicall, not to be called directly"""
         self.count_inflightRequests.inc()
         try:
-            response = self.session.get(url, timeout=timeout)
+            response = self.session.get(
+                url,
+                timeout=timeout,
+                headers={"user-agent": "cdbsearch" + bool(self.user) * "/" + self.user},
+            )
             response.raise_for_status()
             content = response.json()
         except Exception:
@@ -489,7 +499,13 @@ class ChessDB:
 
 
 async def cdbsearch(
-    epd, depthLimit, concurrency, evalDecay, cursedWins=False, proveMates=False
+    epd,
+    depthLimit,
+    concurrency,
+    evalDecay,
+    cursedWins=False,
+    proveMates=False,
+    user=None,
 ):
     concurrency = max(1, concurrency)
     evalDecay = max(0, evalDecay)
@@ -498,6 +514,8 @@ async def cdbsearch(
     print("Root position: ", epd)
     print("evalDecay    : ", evalDecay)
     print("Concurrency  : ", concurrency)
+    if user:
+        print("User name    : ", user)
     if cursedWins:
         print("Cursed Wins  :  True")
     if proveMates:
@@ -521,6 +539,7 @@ async def cdbsearch(
         evalDecay=evalDecay,
         cursedWins=cursedWins,
         rootBoard=board.copy(),
+        user=user,
     )
 
     depth = 1
@@ -618,6 +637,10 @@ if __name__ == "__main__":
         action="store_true",
         help='Attempt to prove that mate PV lines have no better defence. Proven mates are indicated with "CHECKMATE" at the end of the PV, whereas unproven ones use "checkmate".',
     )
+    argParser.add_argument(
+        "--user",
+        help="Add this username to the http user-agent header.",
+    )
     args = argParser.parse_args()
 
     if args.san is not None:
@@ -639,5 +662,6 @@ if __name__ == "__main__":
             evalDecay=args.evalDecay,
             cursedWins=args.cursedWins,
             proveMates=args.proveMates,
+            user=args.user,
         )
     )

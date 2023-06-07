@@ -166,6 +166,10 @@ if __name__ == "__main__":
         help="Argument passed to cdbsearch.",
     )
     argParser.add_argument(
+        "--user",
+        help="Argument passed to cdbsearch.",
+    )
+    argParser.add_argument(
         "--bulkConcurrency",
         help="Number of concurrent processes running cdbsearch.",
         type=int,
