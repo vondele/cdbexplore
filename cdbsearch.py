@@ -14,7 +14,7 @@ CDB_SPECIAL = 10000
 depthForceQuery = 10  # force queryall if unscored moves exist and depths exceeds this
 depthAllowExts = 4  # allow extension of the unique bestmove if depth exceeds this
 depthUnscored = 25  # score an unscored move if depth - scoreCount exceeds this
-depthReprobePV = 15  # call reprobe_PV when depth exceeds this
+depthReprobePV = 20  # call reprobe_PV when depth exceeds this
 
 
 class AtomicTT:
@@ -338,7 +338,7 @@ class ChessDB:
         for ucimove in pv[: -1 if pv[-1] in ["checkmate", "draw"] else None]:
             board.push(chess.Move.from_uci(ucimove))
         while board.move_stack:
-            asyncio.ensure_future(self.queryall(board.epd(), skipTT=True))
+            await self.queryall(board.epd(), skipTT=True)
             board.pop()
 
     def move_depth(self, bestscore, worstscore, score, depth):
@@ -480,7 +480,7 @@ class ChessDB:
                 bestmove = m
 
         if depth > depthReprobePV:
-            await self.reprobe_PV(board.copy(), minicache[bestmove])
+            asyncio.ensure_future(self.reprobe_PV(board.copy(), minicache[bestmove]))
 
         # for lines leading to mates, TBwins and cursed wins we do not use mini-max, but rather store the distance in ply
         # this means local evals for such nodes will always be in sync with cdb
