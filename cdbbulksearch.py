@@ -47,7 +47,7 @@ def load_epds(filename, pgnBegin=-1, pgnEnd=None):
                     if line.startswith("#"):  # ignore comments
                         continue
                     epd, _, moves = line.partition("moves")
-                    epd = " ".join(epd.split()[:4])  # cdb ignores move counters anyway
+                    epd = " ".join(epd.split()[:6])  # include potential move counters
                     epdMoves = " moves"
                     for m in moves.split():
                         if (
@@ -66,7 +66,7 @@ def load_epds(filename, pgnBegin=-1, pgnEnd=None):
     epds = {}
     for item in metalist:
         if isPGN:
-            epd = item.board().epd()
+            epd = item.board().fen()  # include potential move counters
             moves = [None] + list(item.mainline_moves())
             plyBegin = (
                 0
