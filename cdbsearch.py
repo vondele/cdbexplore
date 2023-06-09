@@ -71,7 +71,7 @@ class ChessDB:
         self.cursedWins = cursedWins
         self.user = "" if user is None else str(user)
 
-        # the root position under which the tree will be built
+        # the board containing as final leaf(!) the root position under which the tree will be built
         self.rootBoard = rootBoard
 
         # some counters that will be accessed by multiple threads
@@ -334,7 +334,7 @@ class ChessDB:
         return self.TT.set(epd, result)
 
     async def reprobe_PV(self, board, pv):
-        """query all positions along the PV back to the root"""
+        """query all positions along the PV, starting from its leaf and all the way back to the start position of rootBoard"""
         for ucimove in pv[: -1 if pv[-1] in ["checkmate", "draw"] else None]:
             board.push(chess.Move.from_uci(ucimove))
         while board.move_stack:
@@ -479,6 +479,7 @@ class ChessDB:
                 bestscore = s
                 bestmove = m
 
+        # in order to keep cdb up-to-date with possible progress we have made locally, we reprobe the found PV all the way back to the start position of rootBoard
         if depth > depthReprobePV:
             asyncio.ensure_future(self.reprobe_PV(board.copy(), minicache[bestmove]))
 
@@ -540,6 +541,9 @@ async def cdbsearch(
         await chessdb.add_cdb_pv_positions(board.epd())
         print("  cdb PV len: ", chessdb.cdbPvToLeaf.get(board.epd(), 0), flush=True)
         bestscore, pv = await chessdb.search(board, depth)
+        # for cases where board contains (many) moves leading to a root position unknown to cdb, we immediately pass these moves + the found PV to cdb
+        if depth <= depthReprobePV:
+            asyncio.ensure_future(chessdb.reprobe_PV(board.copy(), pv))
         print("  score     : ", bestscore)
         pvlen = len(pv) - 1 if pv[-1] in ["checkmate", "draw", "invalid"] else len(pv)
         print("  PV        : ", " ".join(pv[:-1]), end=" ", flush=True)
