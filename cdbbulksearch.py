@@ -27,18 +27,23 @@ def wrapcdbsearch(epd, depthLimit, concurrency, evalDecay, cursedWins, proveMate
     return mystdout.getvalue()
 
 
-def load_epds(filename, pgnBegin=-1, pgnEnd=None):
+def load_epds(filename, plyBegin=-1, plyEnd=None):
     """returns a list of unique EPDs found in the given file"""
-    isPGN = filename.endswith(".pgn")
-    metalist = []
-    if isPGN:
+    epdlist = []
+    if filename.endswith(".pgn"):
         pgn = open(args.filename)
         while True:
             game = chess.pgn.read_game(pgn)
             if game is None:
                 break
-            metalist.append(game)
-        print(f"Loaded {len(metalist)} (opening) lines from file {args.filename}.")
+            epd = game.board().fen()  # include potential move counters
+            epdMoves = " moves"
+            for m in game.mainline_moves():
+                epdMoves += f" {m}"
+            if epdMoves != " moves":
+                epd += epdMoves
+            epdlist.append(epd)
+        print(f"Loaded {len(epdlist)} (opening) lines from file {args.filename}.")
     else:
         with open(args.filename) as f:
             for line in f:
@@ -47,7 +52,12 @@ def load_epds(filename, pgnBegin=-1, pgnEnd=None):
                     if line.startswith("#"):  # ignore comments
                         continue
                     epd, _, moves = line.partition("moves")
-                    epd = " ".join(epd.split()[:4])  # cdb ignores move counters anyway
+                    epd = epd.split()[:6]  # include potential move counters
+                    if len(epd) == 6 and not (
+                        epd[4].isnumeric() and epd[5].isnumeric()
+                    ):
+                        epd = epd[:4]
+                    epd = " ".join(epd)
                     epdMoves = " moves"
                     for m in moves.split():
                         if (
@@ -61,36 +71,34 @@ def load_epds(filename, pgnBegin=-1, pgnEnd=None):
                         epdMoves += f" {m}"
                     if epdMoves != " moves":
                         epd += epdMoves
-                    metalist.append(epd)
+                    epdlist.append(epd)
+        print(f"Loaded {len(epdlist)} (extended) EPDs from file {args.filename}.")
 
-    epds = {}
-    for item in metalist:
-        if isPGN:
-            epd = item.board().epd()
-            moves = [None] + list(item.mainline_moves())
-            plyBegin = (
-                0
-                if pgnBegin is None
-                else max(0, pgnBegin + len(moves))
-                if pgnBegin < 0
-                else min(pgnBegin, len(moves))
-            )
-            plyEnd = (
-                len(moves)
-                if pgnEnd is None
-                else max(0, pgnEnd + len(moves))
-                if plyEnd < 0
-                else min(pgnEnd, len(moves))
-            )
-            for ply, move in enumerate(moves):
-                if move is not None:
-                    epd += f" {move}"
-                if plyBegin <= ply and ply < plyEnd:
-                    epds.update({epd: None})
-                if move is None:
-                    epd += " moves"
-        else:
-            epds.update({item: None})
+    epds = {}  # use a dict to filter duplicates
+    for epd in epdlist:
+        epd, _, moves = epd.partition(" moves")
+        moves = [None] + moves.split()  # to be able to use plyBegin=0 for epd
+        plyB = (
+            0
+            if plyBegin is None
+            else max(0, plyBegin + len(moves))
+            if plyBegin < 0
+            else min(plyBegin, len(moves))
+        )
+        plyE = (
+            len(moves)
+            if plyEnd is None
+            else max(0, plyEnd + len(moves))
+            if plyE < 0
+            else min(plyEnd, len(moves))
+        )
+        for ply, m in enumerate(moves):
+            if m is not None:
+                epd += f" {m}"
+            if plyB <= ply and ply < plyE:
+                epds.update({epd: None})
+            if m is None:
+                epd += " moves"
     epds = list(epds.keys())
 
     print(f"Loaded {len(epds)} unique EPDs from file {args.filename}.")
@@ -114,21 +122,22 @@ class TaskCounter:
 if __name__ == "__main__":
     freeze_support()
     argParser = argparse.ArgumentParser(
-        description="Sequentially call cdbsearch for all the positions stored in a file.",
+        description="Invoke cdbsearch for positions loaded from a file.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     argParser.add_argument(
-        "filename", help="PGN file if suffix is .pgn, o/w a text file with EPDs."
+        "filename",
+        help="""PGN file if suffix is .pgn, o/w a text file with FENs/EPDs. The latter may use the extended "moves m1 m2 m3" syntax from cdb's API.""",
     )
     argParser.add_argument(
-        "--pgnBegin",
-        help="Ply in each line of the PGN file from which positions will be searched by cdbsearch. A value of 0 corresponds to the starting FEN without any moves played. Negative values count from the back, as per the Python standard.",
+        "--plyBegin",
+        help="Ply in each line of filename from which positions will be searched by cdbsearch. A value of 0 corresponds to the starting FEN without any moves played. Negative values count from the back, as per the Python standard.",
         type=int,
         default=-1,
     )
     argParser.add_argument(
-        "--pgnEnd",
-        help="Ply in each line of the PGN file until which positions will be searched by cdbsearch. A value of None means including the final move of the line.",
+        "--plyEnd",
+        help="Ply in each line of filename until which positions will be searched by cdbsearch. A value of None means including the final move of the line.",
         type=int,
         default=None,
     )
@@ -222,7 +231,7 @@ if __name__ == "__main__":
             if first or args.forever:
                 if first or args.reload:
                     try:
-                        epds = load_epds(args.filename, args.pgnBegin, args.pgnEnd)
+                        epds = load_epds(args.filename, args.plyBegin, args.plyEnd)
                         if args.shuffle:
                             random.shuffle(epds)
                     except Exception:

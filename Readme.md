@@ -110,17 +110,17 @@ Search at depth  1
 This is a command line program to sequentially explore several positions.
 
 ```
-usage: cdbbulksearch.py [-h] [--pgnBegin PGNBEGIN] [--pgnEnd PGNEND] [--shuffle] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--proveMates] [--user USER] [--bulkConcurrency BULKCONCURRENCY] [--forever] [--reload] filename
+usage: cdbbulksearch.py [-h] [--plyBegin PLYBEGIN] [--plyEnd PLYEND] [--shuffle] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--proveMates] [--user USER] [--bulkConcurrency BULKCONCURRENCY] [--forever] [--reload] filename
 
-Sequentially call cdbsearch for all the positions stored in a file.
+Invoke cdbsearch for positions loaded from a file.
 
 positional arguments:
-  filename              PGN file if suffix is .pgn, o/w a text file with EPDs.
+  filename              PGN file if suffix is .pgn, o/w a text file with FENs/EPDs. The latter may use the extended "moves m1 m2 m3" syntax from cdb's API.
 
 options:
   -h, --help            show this help message and exit
-  --pgnBegin PGNBEGIN   Ply in each line of the PGN file from which positions will be searched by cdbsearch. A value of 0 corresponds to the starting FEN without any moves played. Negative values count from the back, as per the Python standard. (default: -1)
-  --pgnEnd PGNEND       Ply in each line of the PGN file until which positions will be searched by cdbsearch. A value of None means including the final move of the line. (default: None)
+  --plyBegin PLYBEGIN   Ply in each line of filename from which positions will be searched by cdbsearch. A value of 0 corresponds to the starting FEN without any moves played. Negative values count from the back, as per the Python standard. (default: -1)
+  --plyEnd PLYEND       Ply in each line of filename until which positions will be searched by cdbsearch. A value of None means including the final move of the line. (default: None)
   --shuffle             Shuffle the positions to be searched randomly. (default: False)
   --depthLimit DEPTHLIMIT
                         Argument passed to cdbsearch. (default: 5)
