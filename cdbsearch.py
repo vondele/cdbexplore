@@ -10,11 +10,12 @@ CDB_TBWIN = 25000
 CDB_CURSED = 20000
 CDB_SPECIAL = 10000
 
-# some depth constants that trigger certain events in search
+# some (depth) constants that trigger certain events in search
 depthForceQuery = 10  # force queryall if unscored moves exist and depths exceeds this
 depthAllowExts = 4  # allow extension of the unique bestmove if depth exceeds this
 depthUnscored = 25  # score an unscored move if depth - scoreCount exceeds this
-depthReprobePV = 20  # call reprobe_PV when depth exceeds this
+depthReprobePV = 16  # do not call reprobe_PV when depth is smaller than this
+percentReprobePV = 1  # % of queryall API calls we are willing to use for reprobe_PV
 
 
 class AtomicTT:
@@ -83,6 +84,7 @@ class ChessDB:
         self.count_sumInflightRequests = AtomicInteger()
         self.count_inflightUncached = AtomicInteger()
         self.count_sumInflightUncached = AtomicInteger()
+        self.count_reprobeQueryall = AtomicInteger()
 
         # for timing output
         self.count_starttime = time.perf_counter()
@@ -339,6 +341,7 @@ class ChessDB:
             board.push(chess.Move.from_uci(ucimove))
         while board.move_stack:
             await self.queryall(board.epd(), skipTT=True)
+            self.count_reprobeQueryall.inc()
             board.pop()
 
     def move_depth(self, bestscore, worstscore, score, depth):
@@ -479,8 +482,14 @@ class ChessDB:
                 bestscore = s
                 bestmove = m
 
-        # in order to keep cdb up-to-date with possible progress we have made locally, we reprobe the found PV all the way back to the start position of rootBoard
-        if depth > depthReprobePV:
+        # in order to keep cdb up-to-date with possible progress we have made locally, we reprobe the found PV all the way back to the start position of rootBoard: but only if we would stay within the agreed percentage of queryall API calls
+        if (
+            depth >= depthReprobePV
+            and self.count_reprobeQueryall.get()
+            + len(board.move_stack)
+            + len(minicache[bestmove])
+            < self.count_uncached.get() * percentReprobePV / 100
+        ):
             asyncio.ensure_future(self.reprobe_PV(board.copy(), minicache[bestmove]))
 
         # for lines leading to mates, TBwins and cursed wins we do not use mini-max, but rather store the distance in ply
@@ -541,9 +550,8 @@ async def cdbsearch(
         await chessdb.add_cdb_pv_positions(board.epd())
         print("  cdb PV len: ", chessdb.cdbPvToLeaf.get(board.epd(), 0), flush=True)
         bestscore, pv = await chessdb.search(board, depth)
-        # for cases where board contains (many) moves leading to a root position unknown to cdb, we immediately pass these moves + the found PV to cdb
-        if depth <= depthReprobePV:
-            asyncio.ensure_future(chessdb.reprobe_PV(board.copy(), pv))
+        # always reprobe the root PV
+        asyncio.ensure_future(chessdb.reprobe_PV(board.copy(), pv))
         print("  score     : ", bestscore)
         pvlen = len(pv) - 1 if pv[-1] in ["checkmate", "draw", "invalid"] else len(pv)
         print("  PV        : ", " ".join(pv[:-1]), end=" ", flush=True)
@@ -556,6 +564,7 @@ async def cdbsearch(
         print(f"  max ply   :  {len(chessdb.semaphoreTree)}")
         queryall = chessdb.count_queryall.get()
         uncached = chessdb.count_uncached.get()
+        reprobed = chessdb.count_reprobeQueryall.get()
         if queryall:
             print("  queryall  : ", queryall)
             print(f"  bf        :  { queryall**(1/depth) :.2f}")
@@ -568,13 +577,14 @@ async def cdbsearch(
             print("  chessdbq  : ", uncached)
             print("  enqueued  : ", chessdb.count_enqueued.get())
             print("  unscored  : ", chessdb.count_unscored.get())
+            print(f"  reprobed  :  {reprobed} ({reprobed / max(uncached, 1) * 100:.2f}%)")
             print("  date      : ", datetime.now().isoformat())
             runtime = time.perf_counter() - chessdb.count_starttime
             timestr = str(timedelta(seconds=int(100 * runtime) / 100))
             print("  total time: ", timestr[: -4 if "." in timestr else None])
             print(
                 "  cdb time  : ",
-                int(1000 * runtime / chessdb.count_uncached.get()),
+                int(1000 * runtime / max(uncached, 1)),
             )
 
         pvline = " ".join(epdMoves + pv[:pvlen])
