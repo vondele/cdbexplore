@@ -551,7 +551,7 @@ async def cdbsearch(
         # always reprobe the root PV
         asyncio.ensure_future(chessdb.reprobe_PV(board.copy(), pv))
         print("  score     : ", bestscore)
-        pvlen = len(pv) - 1 if pv[-1] in ["checkmate", "draw", "invalid"] else len(pv)
+        pvlen = len(pv) - (pv[-1] in ["checkmate", "draw", "invalid"])
         if proveMates and pv[-1] == "checkmate" and pvlen:
             print("  PV        : ", " ".join(pv[:-1]), end=" ", flush=True)
             if await chessdb.pv_has_proven_mate(board.copy(), pv):
