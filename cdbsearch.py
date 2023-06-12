@@ -552,14 +552,17 @@ async def cdbsearch(
         asyncio.ensure_future(chessdb.reprobe_PV(board.copy(), pv))
         print("  score     : ", bestscore)
         pvlen = len(pv) - 1 if pv[-1] in ["checkmate", "draw", "invalid"] else len(pv)
-        print("  PV        : ", " ".join(pv[:-1]), end=" ", flush=True)
         if proveMates and pv[-1] == "checkmate" and pvlen:
+            print("  PV        : ", " ".join(pv[:-1]), end=" ", flush=True)
             if await chessdb.pv_has_proven_mate(board.copy(), pv):
-                pv[-1] = "CHECKMATE" + (
-                    f" (#{(pvlen+1)//2})" if bestscore > 0 else f" (#-{pvlen//2})"
-                )
-        print(f"{pv[-1]}\n  PV len    :  {pvlen}")
-        print(f"  max ply   :  {len(chessdb.semaphoreTree)}")
+                mStr = f"(#{(pvlen+1)//2})" if bestscore > 0 else f" (#-{pvlen//2})"
+                print("CHECKMATE", mStr)
+            else:
+                print("checkmate")
+        else:
+            print("  PV        : ", " ".join(pv))
+        print("  PV len    : ", pvlen)
+        print("  max ply   : ", len(chessdb.semaphoreTree))
         queryall = chessdb.count_queryall.get()
         if queryall:
             uncached = chessdb.count_uncached.get()
