@@ -391,8 +391,7 @@ class ChessDB:
 
         for m, s in [t for t in scored_db_moves.items() if t[0] != "depth"]:
             if s > bestscore:
-                bestscore = s
-                bestmove = m
+                bestmove, bestscore = m, s
             if s < worstscore:
                 worstscore = s
 
@@ -479,8 +478,7 @@ class ChessDB:
             if s > bestscore or (
                 s == bestscore and len(minicache[m]) > len(minicache[bestmove])
             ):
-                bestscore = s
-                bestmove = m
+                bestmove, bestscore = m, s
 
         # in order to keep cdb up-to-date with possible progress we have made locally, we reprobe the found PV all the way back to the start position of rootBoard: but only if we would stay within the agreed percentage of queryall API calls
         if (
@@ -563,29 +561,31 @@ async def cdbsearch(
         print(f"{pv[-1]}\n  PV len    :  {pvlen}")
         print(f"  max ply   :  {len(chessdb.semaphoreTree)}")
         queryall = chessdb.count_queryall.get()
-        uncached = chessdb.count_uncached.get()
-        reprobed = chessdb.count_reprobeQueryall.get()
         if queryall:
+            uncached = chessdb.count_uncached.get()
+            reprobed = chessdb.count_reprobeQueryall.get()
+            runtime = time.perf_counter() - chessdb.count_starttime
             print("  queryall  : ", queryall)
-            print(f"  bf        :  { queryall**(1/depth) :.2f}")
+            print(f"  bf        :  {queryall**(1/depth):.2f}")
             print(
-                f"  inflightR : { chessdb.count_sumInflightRequests.get() / max(uncached, 1) : .2f}"
+                f"  chessdbq  :  {uncached} ({uncached / queryall * 100:.2f}% of queryall)"
             )
-            print(
-                f"  inflightQ : { chessdb.count_sumInflightUncached.get() / max(uncached, 1) : .2f}"
-            )
-            print("  chessdbq  : ", uncached)
             print("  enqueued  : ", chessdb.count_enqueued.get())
             print("  unscored  : ", chessdb.count_unscored.get())
-            print(f"  reprobed  :  {reprobed} ({reprobed / max(uncached, 1) * 100:.2f}%)")
+            uncached = max(uncached, 1)
+            print(
+                f"  reprobed  :  {reprobed} ({reprobed / uncached * 100:.2f}% of chessdbq)"
+            )
+            print(
+                f"  inflightQ :  {chessdb.count_sumInflightUncached.get() / uncached:.2f}"
+            )
+            print(
+                f"  inflightR :  {chessdb.count_sumInflightRequests.get() / uncached:.2f}"
+            )
+            print("  cdb time  : ", int(1000 * runtime / uncached))
             print("  date      : ", datetime.now().isoformat())
-            runtime = time.perf_counter() - chessdb.count_starttime
             timestr = str(timedelta(seconds=int(100 * runtime) / 100))
             print("  total time: ", timestr[: -4 if "." in timestr else None])
-            print(
-                "  cdb time  : ",
-                int(1000 * runtime / max(uncached, 1)),
-            )
 
         pvline = " ".join(epdMoves + pv[:pvlen])
         if pvline:
