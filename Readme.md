@@ -46,7 +46,7 @@ Search at depth  10
   bf        :  2.12
   chessdbq  :  416 (22.98% of queryall)
   enqueued  :  12
-  unscored  :  0
+  unscored  :  0 (0.00% of enqueued)
   reprobed  :  84 (20.19% of chessdbq)
   inflightQ :  19.11
   inflightR :  7.67
@@ -97,7 +97,7 @@ Search at depth  1
   bf        :  1644.00
   chessdbq  :  1298 (78.95% of queryall)
   enqueued  :  0
-  unscored  :  0
+  unscored  :  0 (0.00% of enqueued)
   reprobed  :  10 (0.77% of chessdbq)
   inflightQ :  6.36
   inflightR :  5.18
