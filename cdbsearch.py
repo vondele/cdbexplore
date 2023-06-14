@@ -567,14 +567,18 @@ async def cdbsearch(
         if queryall:
             uncached = chessdb.count_uncached.get()
             reprobed = chessdb.count_reprobeQueryall.get()
+            enqueued = chessdb.count_enqueued.get()
+            unscored = chessdb.count_unscored.get()
             runtime = time.perf_counter() - chessdb.count_starttime
             print("  queryall  : ", queryall)
             print(f"  bf        :  {queryall**(1/depth):.2f}")
             print(
                 f"  chessdbq  :  {uncached} ({uncached / queryall * 100:.2f}% of queryall)"
             )
-            print("  enqueued  : ", chessdb.count_enqueued.get())
-            print("  unscored  : ", chessdb.count_unscored.get())
+            print("  enqueued  : ", enqueued)
+            print(
+                f"  unscored  :  {unscored} ({unscored / max(enqueued, 1) * 100:.2f}% of enqueued)"
+            )
             uncached = max(uncached, 1)
             print(
                 f"  reprobed  :  {reprobed} ({reprobed / uncached * 100:.2f}% of chessdbq)"
