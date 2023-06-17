@@ -10,10 +10,13 @@ CDB_TBWIN = 25000
 CDB_CURSED = 20000
 CDB_SPECIAL = 10000
 
+# minimum number of moves scored by cdb for analysed nodes
+CDB_SIEVED = 5
+
 # some (depth) constants that trigger certain events in search
 depthForceQuery = 10  # force queryall if unscored moves exist and depths exceeds this
 depthAllowExts = 4  # allow extension of the unique bestmove if depth exceeds this
-depthUnscored = 25  # score an unscored move if depth - scoreCount exceeds this
+depthUnscored = 25  # score an unscored move if depth - scoredCount exceeds this
 depthReprobePV = 16  # do not call reprobe_PV when depth is smaller than this
 percentReprobePV = 1  # % of queryall API calls we are willing to use for reprobe_PV
 
@@ -178,7 +181,7 @@ class ChessDB:
             return await self.pv_has_proven_mate(board.copy(), pv[1:])
 
         scored_db_moves = await self.queryall(board.epd())
-        if len(scored_db_moves) - 1 != len(list(board.legal_moves)):
+        if len(scored_db_moves) - 1 < len(list(board.legal_moves)):
             # there are unscored moves: help to construct a proof by querying all of them
             for move in board.legal_moves:
                 if move.uci() not in scored_db_moves:
@@ -331,8 +334,8 @@ class ChessDB:
                 lasterror = "Surprise reply"
                 continue
 
-        # set and return a possibly even deeper result
         self.count_inflightUncached.dec()
+        # set and return a possibly even deeper result
         return self.TT.set(epd, result)
 
     async def reprobe_PV(self, board, pv):
@@ -373,17 +376,22 @@ class ChessDB:
         if scored_db_moves == {}:
             return 0, ["invalid"]
 
-        scoreCount = len(scored_db_moves) - 1  # number of scored moves for board
+        scoredCount = len(scored_db_moves) - 1  # number of scored moves for board
+        movesCount = len(list(board.legal_moves))  # numer of legal moves
+        missingCDBmoves = scoredCount < min(CDB_SIEVED, movesCount)
+
+        # for positions with an incomplete move list, we schedule a queue API call, since querall for positions beyond cdb's old piece count limit may not be enough to add new moves
+        if missingCDBmoves:
+            asyncio.ensure_future(
+                self.__cdbapicall(f"?action=queue&board={epd}&json=1", timeout=60)
+            )
 
         # force a query for high depth nodes that do not have a full list of scored moves: we use this to add newly scored moves to our TT
         skipTT_db_moves = None
-        if depth > depthForceQuery:
-            for move in board.legal_moves:
-                if move.uci() not in scored_db_moves:
-                    skipTT_db_moves = asyncio.create_task(
-                        self.queryall(board.epd(), skipTT=True)
-                    )
-                    break
+        if (depth > depthForceQuery and scoredCount < movesCount) or missingCDBmoves:
+            skipTT_db_moves = asyncio.create_task(
+                self.queryall(board.epd(), skipTT=True)
+            )
 
         bestscore = -(CDB_MATE + 1)
         bestmove = None
@@ -405,7 +413,7 @@ class ChessDB:
         newly_scored_moves = {"depth": depth}
         minicache = {}  # store candidate PVs for all newly scored moves
         tasks = {}
-        tried_unscored = False
+        allowUnscored = scoredCount >= CDB_SIEVED  # allow search of unscored moves
 
         # the level of the search tree we are in, i.e. how many plies we are away from rootBoard
         level = len(board.move_stack) - len(self.rootBoard.move_stack)
@@ -429,11 +437,11 @@ class ChessDB:
                         newdepth += 1
 
                 # schedule qualifying moves for deeper searches, at most 1 unscored move
-                # for sufficiently large depth and suffiently small scoreCount we possibly schedule an unscored move
-                if (newdepth >= 0 and not (score is None and tried_unscored)) or (
+                # for sufficiently large depth and suffiently small scoredCount we possibly schedule an unscored move
+                if (newdepth >= 0 and (score is not None or allowUnscored)) or (
                     score is None
-                    and not tried_unscored
-                    and depth - scoreCount > depthUnscored
+                    and allowUnscored
+                    and depth - scoredCount > depthUnscored
                 ):
                     board.push(move)
                     tasks[ucimove] = asyncio.create_task(
@@ -441,7 +449,7 @@ class ChessDB:
                     )
                     board.pop()
                     if score is None:
-                        tried_unscored = True
+                        allowUnscored = False
                         self.count_unscored.inc()
                 elif score is not None:
                     newly_scored_moves[ucimove] = scored_db_moves[ucimove]
