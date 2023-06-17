@@ -383,7 +383,9 @@ class ChessDB:
         # for positions with an incomplete move list, we schedule a queue API call, since querall for positions beyond cdb's old piece count limit may not be enough to add new moves
         if missingCDBmoves:
             asyncio.ensure_future(
-                self.__cdbapicall(f"?action=queue&board={epd}&json=1", timeout=60)
+                self.__cdbapicall(
+                    f"?action=queue&board={board.epd()}&json=1", timeout=60
+                )
             )
 
         # force a query for high depth nodes that do not have a full list of scored moves: we use this to add newly scored moves to our TT
