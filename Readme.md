@@ -37,23 +37,24 @@ Sample output:
 
 ```
 Search at depth  10
-  cdb PV len:  68
-  score     :  137
-  PV        :  d7d5 h2h3 h7h5 g4h5 e7e5 d2d3 b8c6 b1c3 g8f6 a2a3 h8h5 f1g2 d5d4 c3e4 f6e4 g2e4 d8d6 e4f3 h5h8 e2e4 d4e3 c1e3 c6d4 h3h4
-  PV len    :  24
-  max ply   :  77
-  queryall  :  1810
-  bf        :  2.12
-  chessdbq  :  416 (22.98% of queryall)
-  enqueued  :  12
+  cdb PV len:  67
+  score     :  138
+  PV        :  d7d5 h2h3 h7h5 g4h5 e7e5 d2d3 b8c6 g1f3 h8h5 b1c3 g8f6 a2a3 f8e7 e2e4 d5e4
+  PV len    :  15
+  max ply   :  68
+  queryall  :  2189
+  bf        :  2.16
+  chessdbq  :  578 (26.40% of queryall)
+  enqueued  :  13
+  requeued  :  4
   unscored  :  0 (0.00% of enqueued)
-  reprobed  :  84 (20.19% of chessdbq)
-  inflightQ :  19.11
-  inflightR :  7.67
-  cdb time  :  145
-  date      :  2023-06-12T13:21:08.463381
-  total time:  0:01:00.71
-  URL       :  https://chessdb.cn/queryc_en/?rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR_w_KQkq_-_moves_g2g4_d7d5_h2h3_h7h5_g4h5_e7e5_d2d3_b8c6_b1c3_g8f6_a2a3_h8h5_f1g2_d5d4_c3e4_f6e4_g2e4_d8d6_e4f3_h5h8_e2e4_d4e3_c1e3_c6d4_h3h4
+  reprobed  :  89 (15.40% of chessdbq)
+  inflightQ :  19.87
+  inflightR :  8.60
+  cdb time  :  100
+  date      :  2023-06-17T14:43:38.862147
+  total time:  0:00:57.84
+  URL       :  https://chessdb.cn/queryc_en/?rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR_w_KQkq_-_moves_g2g4_d7d5_h2h3_h7h5_g4h5_e7e5_d2d3_b8c6_g1f3_h8h5_b1c3_g8f6_a2a3_f8e7_e2e4_d5e4
 ```
 
 Meaning of the fields:
@@ -68,6 +69,7 @@ queryall   : Number of positions visited in the search tree, with results provid
 bf         : Branching factor q^(1/d) computed from queryall q and depth d.
 chessdbq   : Number of positions requested to cdb.
 enqueued   : Number of positions that did not exist within cdb but have been added as part of the search.
+requeued   : Number of positions that were re-queued to prompt cdb to provide at least 5 scored moves.
 unscored   : Number of existing unscored moves within cdb that were assigned a score as part of the search.
 reprobed   : Number of positions in local PV lines re-requested to cdb.
 inflightQ  : Number of concurrent queries, guaranteed to return scored moves, made to cdb on average.
@@ -86,24 +88,25 @@ Root position:  3r4/3N2kr/1p6/pBpn1p2/Q2PR1p1/P7/1P4P1/2q3K1 w - -
 evalDecay    :  0
 Concurrency  :  16
 Prove Mates  :  True
-Starting date:  2023-06-12T13:21:39.164176
+Starting date:  2023-06-17T14:44:32.611779
 Search at depth  1
   cdb PV len:  10
   score     :  -29990
   PV        :  g1f2 f5e4 a4b3 h7h1 b3c3 d5c3 b5f1 c1f4 f2e1 f4e3 CHECKMATE (#-5)
   PV len    :  10
   max ply   :  10
-  queryall  :  1644
-  bf        :  1644.00
-  chessdbq  :  1298 (78.95% of queryall)
+  queryall  :  1315
+  bf        :  1315.00
+  chessdbq  :  1041 (79.16% of queryall)
   enqueued  :  0
+  requeued  :  0
   unscored  :  0 (0.00% of enqueued)
-  reprobed  :  10 (0.77% of chessdbq)
-  inflightQ :  6.36
-  inflightR :  5.18
-  cdb time  :  98
-  date      :  2023-06-12T13:23:47.081203
-  total time:  0:02:07.91
+  reprobed  :  10 (0.96% of chessdbq)
+  inflightQ :  5.07
+  inflightR :  2.74
+  cdb time  :  136
+  date      :  2023-06-17T14:46:54.857399
+  total time:  0:02:22.24
   URL       :  https://chessdb.cn/queryc_en/?3r4/3N2kr/1p6/pBpn1p2/Q2PR1p1/P7/1P4P1/2q3K1_w_-_-_moves_g1f2_f5e4_a4b3_h7h1_b3c3_d5c3_b5f1_c1f4_f2e1_f4e3
 ```
 
