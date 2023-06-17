@@ -144,8 +144,8 @@ class ChessDB:
         if content and content.get("status", None) == "ok" and "pv" in content:
             pv = content["pv"]
             self.cdbPvToLeaf[epd] = len(pv)
+            asyncio.ensure_future(self.queryall(epd))
             board = chess.Board(epd)
-            asyncio.ensure_future(self.queryall(board.epd()))
             for parsed, ucimove in enumerate(pv):
                 board.push(chess.Move.from_uci(ucimove))
                 self.cdbPvToLeaf[board.epd()] = len(pv) - 1 - parsed
@@ -371,8 +371,9 @@ class ChessDB:
         if t is not None:
             return t
 
+        epd = board.epd()
         # get current ranking
-        scored_db_moves = await self.queryall(board.epd())
+        scored_db_moves = await self.queryall(epd)
         if scored_db_moves == {}:
             return 0, ["invalid"]
 
@@ -383,17 +384,13 @@ class ChessDB:
         # for positions with an incomplete move list, we schedule a queue API call, since querall for positions beyond cdb's old piece count limit may not be enough to add new moves
         if missingCDBmoves:
             asyncio.ensure_future(
-                self.__cdbapicall(
-                    f"?action=queue&board={board.epd()}&json=1", timeout=60
-                )
+                self.__cdbapicall(f"?action=queue&board={epd}&json=1", timeout=60)
             )
 
         # force a query for high depth nodes that do not have a full list of scored moves: we use this to add newly scored moves to our TT
         skipTT_db_moves = None
         if (depth > depthForceQuery and scoredCount < movesCount) or missingCDBmoves:
-            skipTT_db_moves = asyncio.create_task(
-                self.queryall(board.epd(), skipTT=True)
-            )
+            skipTT_db_moves = asyncio.create_task(self.queryall(epd, skipTT=True))
 
         bestscore = -(CDB_MATE + 1)
         bestmove = None
@@ -432,7 +429,7 @@ class ChessDB:
 
                 # extension if the unique bestmove is the only move to be searched deeper or the position is in the cdb PV
                 if score == bestscore:
-                    cdbPvToLeaf = self.cdbPvToLeaf.get(board.epd(), None)
+                    cdbPvToLeaf = self.cdbPvToLeaf.get(epd, None)
                     if (moves_to_search == 1 and depth > depthAllowExts) or (
                         cdbPvToLeaf is not None and newdepth < cdbPvToLeaf
                     ):
@@ -480,7 +477,7 @@ class ChessDB:
                         board.pop()
 
         # store our computed result
-        self.TT.set(board.epd(), newly_scored_moves)
+        self.TT.set(epd, newly_scored_moves)
 
         # find bestmove and associated PV
         bestscore = -(CDB_MATE + 1)
