@@ -36,24 +36,25 @@ options:
 Sample output:
 
 ```
-Search at depth  10
-  cdb PV len:  68
-  score     :  137
-  PV        :  d7d5 h2h3 h7h5 g4h5 e7e5 d2d3 b8c6 b1c3 g8f6 a2a3 h8h5 f1g2 d5d4 c3e4 f6e4 g2e4 d8d6 e4f3 h5h8 e2e4 d4e3 c1e3 c6d4 h3h4
-  PV len    :  24
-  max ply   :  77
-  queryall  :  1810
-  bf        :  2.12
-  chessdbq  :  416 (22.98% of queryall)
-  enqueued  :  12
+Search at depth  12
+  cdb PV len:  39
+  score     :  141
+  PV        :  d7d5 e2e3 b8c6 f1e2 e7e5 d2d4 h7h5 g4g5 d8g5 g1f3 g5g6 d4e5 c8g4 h1g1 g6e6 b1d2 g8h6 f3d4 e6e5 d2f3 e5f6 d4c6 f6c6 d1d4 f7f6
+  PV len    :  25
+  level     :  68
+  max level :  84
+  queryall  :  6830
+  bf        :  1.14
+  chessdbq  :  2020 (29.58% of queryall)
+  enqueued  :  47
   unscored  :  0 (0.00% of enqueued)
-  reprobed  :  84 (20.19% of chessdbq)
-  inflightQ :  19.11
-  inflightR :  7.67
-  cdb time  :  145
-  date      :  2023-06-12T13:21:08.463381
-  total time:  0:01:00.71
-  URL       :  https://chessdb.cn/queryc_en/?rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR_w_KQkq_-_moves_g2g4_d7d5_h2h3_h7h5_g4h5_e7e5_d2d3_b8c6_b1c3_g8f6_a2a3_h8h5_f1g2_d5d4_c3e4_f6e4_g2e4_d8d6_e4f3_h5h8_e2e4_d4e3_c1e3_c6d4_h3h4
+  reprobed  :  163 (8.07% of chessdbq)
+  inflightQ :  80.27
+  inflightR :  10.56
+  cdb time  :  120
+  date      :  2023-06-18T18:56:24.547853
+  total time:  0:04:03.78
+  URL       :  https://chessdb.cn/queryc_en/?rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR_w_KQkq_-_moves_g2g4_d7d5_e2e3_b8c6_f1e2_e7e5_d2d4_h7h5_g4g5_d8g5_g1f3_g5g6_d4e5_c8g4_h1g1_g6e6_b1d2_g8h6_f3d4_e6e5_d2f3_e5f6_d4c6_f6c6_d1d4_f7f6
 ```
 
 Meaning of the fields:
@@ -63,9 +64,10 @@ cdb PV len : Current length of the PV for this position in cdb in plies.
 score      : The standard minimax score found, not using the decay that cdb implements.
 PV         : Best line found.
 PV len     : Length of this PV line in plies.
-max ply    : Length of the deepest line searched so far.
+level      : Deepest level in search tree reached in the last completed search.
+max level  : Deepest level in search tree reached in all the searches so far.
 queryall   : Number of positions visited in the search tree, with results provided by cdb or the local cache.
-bf         : Branching factor q^(1/d) computed from queryall q and depth d.
+bf         : Branching factor q^(1/(l+1)) computed from queryall q and level l.
 chessdbq   : Number of positions requested to cdb.
 enqueued   : Number of positions that did not exist within cdb but have been added as part of the search.
 unscored   : Number of existing unscored moves within cdb that were assigned a score as part of the search.
@@ -86,25 +88,26 @@ Root position:  3r4/3N2kr/1p6/pBpn1p2/Q2PR1p1/P7/1P4P1/2q3K1 w - -
 evalDecay    :  0
 Concurrency  :  16
 Prove Mates  :  True
-Starting date:  2023-06-12T13:21:39.164176
+Starting date:  2023-06-18T18:58:14.335194
 Search at depth  1
   cdb PV len:  10
   score     :  -29990
-  PV        :  g1f2 f5e4 a4b3 h7h1 b3c3 d5c3 b5f1 c1f4 f2e1 f4e3 CHECKMATE (#-5)
+  PV        :  a4d1 c1d1 g1f2 f5e4 b5a6 h7h1 a6f1 d1d2 f2g3 d2f4 CHECKMATE (#-5)
   PV len    :  10
-  max ply   :  10
-  queryall  :  1644
-  bf        :  1644.00
-  chessdbq  :  1298 (78.95% of queryall)
+  level     :  10
+  max level :  10
+  queryall  :  1504
+  bf        :  1.94
+  chessdbq  :  1117 (74.27% of queryall)
   enqueued  :  0
   unscored  :  0 (0.00% of enqueued)
-  reprobed  :  10 (0.77% of chessdbq)
-  inflightQ :  6.36
-  inflightR :  5.18
-  cdb time  :  98
-  date      :  2023-06-12T13:23:47.081203
-  total time:  0:02:07.91
-  URL       :  https://chessdb.cn/queryc_en/?3r4/3N2kr/1p6/pBpn1p2/Q2PR1p1/P7/1P4P1/2q3K1_w_-_-_moves_g1f2_f5e4_a4b3_h7h1_b3c3_d5c3_b5f1_c1f4_f2e1_f4e3
+  reprobed  :  10 (0.90% of chessdbq)
+  inflightQ :  9.22
+  inflightR :  2.61
+  cdb time  :  117
+  date      :  2023-06-18T19:00:25.868435
+  total time:  0:02:11.53
+  URL       :  https://chessdb.cn/queryc_en/?3r4/3N2kr/1p6/pBpn1p2/Q2PR1p1/P7/1P4P1/2q3K1_w_-_-_moves_a4d1_c1d1_g1f2_f5e4_b5a6_h7h1_a6f1_d1d2_f2g3_d2f4
 ```
 
 ## `cdbbulksearch`
