@@ -16,6 +16,7 @@ CDB_SIEVED = 5
 # some (depth) constants that trigger certain events in search
 depthForceQuery = 10  # force queryall if unscored moves exist and depths exceeds this
 depthAllowExts = 4  # allow extension of the unique bestmove if depth exceeds this
+depthMaxExtension = 10  # maximum number of extensions allowed in a searched line
 depthUnscored = 25  # score an unscored move if depth - scoredCount exceeds this
 depthReprobePV = 16  # do not call reprobe_PV when depth is smaller than this
 percentReprobePV = 1  # % of queryall API calls we are willing to use for reprobe_PV
@@ -367,6 +368,9 @@ class ChessDB:
     async def search(self, board, depth):
         """returns (bestscore, pv) for current position stored in board"""
 
+        # the level of the search tree we are in, i.e. how many plies we are away from rootBoard
+        level = len(board.move_stack) - len(self.rootBoard.move_stack)
+
         t = self.check_trivial_PV(board)
         if t is not None:
             return t
@@ -417,9 +421,6 @@ class ChessDB:
         tasks = {}
         allowUnscored = scoredCount >= CDB_SIEVED  # allow search of unscored moves
 
-        # the level of the search tree we are in, i.e. how many plies we are away from rootBoard
-        level = len(board.move_stack) - len(self.rootBoard.move_stack)
-
         # guarantee sufficient length of the semaphoreTree list, and limit the number of threads that can be created at each level of the search tree
         while len(self.semaphoreTree) < level + 1:
             self.semaphoreTree.append(asyncio.Semaphore(4 * self.concurrency))
@@ -437,6 +438,10 @@ class ChessDB:
                         cdbPvToLeaf is not None and newdepth < cdbPvToLeaf
                     ):
                         newdepth += 1
+
+                # no extensions beyond depthMaxExtension
+                if level >= self.rootDepth + depthMaxExtension:
+                    newdepth = -1
 
                 # schedule qualifying moves for deeper searches, at most 1 unscored move
                 # for sufficiently large depth and suffiently small scoredCount we possibly schedule an unscored move
@@ -557,6 +562,7 @@ async def cdbsearch(
         print("Search at depth ", depth)
         await chessdb.add_cdb_pv_positions(board.epd())
         print("  cdb PV len: ", chessdb.cdbPvToLeaf.get(board.epd(), 0), flush=True)
+        chessdb.rootDepth = depth
         bestscore, pv = await chessdb.search(board, depth)
         # always reprobe the root PV
         asyncio.ensure_future(chessdb.reprobe_PV(board.copy(), pv))
