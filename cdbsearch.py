@@ -4,14 +4,13 @@ from io import StringIO
 from datetime import datetime, timedelta
 from multiprocessing import freeze_support
 
-# current conventions on chessdb.cn for mates, TBwins, cursed wins and special evals
-CDB_MATE = 30000
-CDB_TBWIN = 25000
-CDB_CURSED = 20000
-CDB_SPECIAL = 10000
-
-# minimum number of moves scored by cdb for analysed nodes
-CDB_SIEVED = 5
+# current conventions on chessdb.cn
+CDB_MATE = 30000  # score for mates
+CDB_TBWIN = 25000  # score for TBwins
+CDB_CURSED = 20000  # score for cursed wins
+CDB_SPECIAL = 10000  # assumed strict upper bound for material scores
+CDB_EGTB = 7  # maximum number of pieces for wdl and dtz EGTB's
+CDB_SIEVED = 5  # minimum number of scored moves for an analysed position
 
 # some (depth) constants that trigger certain events in search
 depthForceQuery = 10  # force queryall if unscored moves exist and depths exceeds this
@@ -66,6 +65,7 @@ class ChessDB:
         concurrency,
         evalDecay,
         cursedWins=False,
+        TBsearch=False,
         rootBoard=chess.Board(),
         user=None,
     ):
@@ -73,6 +73,7 @@ class ChessDB:
         self.concurrency = concurrency
         self.evalDecay = evalDecay
         self.cursedWins = cursedWins
+        self.TBsearch = TBsearch
         self.user = "" if user is None else str(user)
 
         # the board containing as final leaf(!) the root position under which the tree will be built
@@ -286,11 +287,11 @@ class ChessDB:
                     continue
 
                 if content == {}:
-                    # the position is not available in cdb, e.g. in TB but with castling rights: score all moves as draw, and let search figure it out
+                    # the position is not available in cdb (EGTB w/ castling rights) - score all moves as 1cp, and let search figure it out
                     found = True
                     board = chess.Board(epd)
                     for move in board.legal_moves:
-                        result[move.uci()] = 0
+                        result[move.uci()] = 1  # we reserve 0 for EGTB draws
                     lasterror = "Position not queued"
                     continue
 
@@ -340,7 +341,7 @@ class ChessDB:
 
     async def reprobe_PV(self, board, pv):
         """query all positions along the PV, starting from its leaf and all the way back to the start position of rootBoard"""
-        for ucimove in pv[: -1 if pv[-1] in ["checkmate", "draw"] else None]:
+        for ucimove in pv[: -1 if pv[-1] in ["checkmate", "draw", "EGTB"] else None]:
             board.push(chess.Move.from_uci(ucimove))
         while board.move_stack:
             await self.queryall(board.epd(), skipTT=True)
@@ -375,6 +376,21 @@ class ChessDB:
         scored_db_moves = await self.queryall(board.epd())
         if scored_db_moves == {}:
             return 0, ["invalid"]
+
+        # stop search if we are in EGTB and know the result
+        if (
+            not self.TBsearch
+            and sum(p in "pnbrqk" for p in board.epd().lower().split()[0]) <= CDB_EGTB
+        ):
+            bestmove, bestscore = max(
+                [t for t in scored_db_moves.items() if t[0] != "depth"],
+                key=lambda t: t[1],
+            )
+            # if bestscore is 1 or -1, we have a TB position with castling rights: continue the search
+            if abs(bestscore) != 1:
+                if abs(bestscore) > CDB_SPECIAL:
+                    bestscore -= 1 if bestscore > 0 else -1
+                return bestscore, [bestmove, "EGTB"]
 
         scoredCount = len(scored_db_moves) - 1  # number of scored moves for board
         movesCount = len(list(board.legal_moves))  # numer of legal moves
@@ -503,7 +519,7 @@ class ChessDB:
         # for lines leading to mates, TBwins and cursed wins we do not use mini-max, but rather store the distance in ply
         # this means local evals for such nodes will always be in sync with cdb
         if abs(bestscore) > CDB_SPECIAL:
-            bestscore -= 1 if bestscore >= 0 else -1
+            bestscore -= 1 if bestscore > 0 else -1
 
         return bestscore, minicache[bestmove]
 
@@ -514,6 +530,7 @@ async def cdbsearch(
     concurrency,
     evalDecay,
     cursedWins=False,
+    TBsearch=False,
     proveMates=False,
     user=None,
 ):
@@ -528,6 +545,8 @@ async def cdbsearch(
         print("User name    : ", user)
     if cursedWins:
         print("Cursed Wins  :  True")
+    if TBsearch:
+        print("TB search    :  True")
     if proveMates:
         print("Prove Mates  :  True")
     print("Starting date: ", datetime.now().isoformat())
@@ -548,6 +567,7 @@ async def cdbsearch(
         concurrency=concurrency,
         evalDecay=evalDecay,
         cursedWins=cursedWins,
+        TBsearch=TBsearch,
         rootBoard=board.copy(),
         user=user,
     )
@@ -561,7 +581,7 @@ async def cdbsearch(
         # always reprobe the root PV
         asyncio.ensure_future(chessdb.reprobe_PV(board.copy(), pv))
         print("  score     : ", bestscore)
-        pvlen = len(pv) - (pv[-1] in ["checkmate", "draw", "invalid"])
+        pvlen = len(pv) - (pv[-1] in ["checkmate", "draw", "EGTB", "invalid"])
         if proveMates and pv[-1] == "checkmate" and pvlen:
             print("  PV        : ", " ".join(pv[:-1]), end=" ", flush=True)
             if await chessdb.pv_has_proven_mate(board.copy(), pv):
@@ -610,8 +630,8 @@ async def cdbsearch(
         url = f"https://chessdb.cn/queryc_en/?{epd}{pvline}"
         print(f"  URL       :  {url.replace(' ', '_')}\n")
         depth += 1
-        if pv in [["checkmate"], ["draw"], ["invalid"]]:  # nothing to be done
-            break
+        if pvlen == 0 or pvlen == 1 and pv[-1] == "EGTB":
+            break  # nothing to be done
 
 
 if __name__ == "__main__":
@@ -654,6 +674,11 @@ if __name__ == "__main__":
         help="Treat cursed wins as wins.",
     )
     argParser.add_argument(
+        "--TBsearch",
+        action="store_true",
+        help="Extend the searching and exploration of lines into cdb's EGTB.",
+    )
+    argParser.add_argument(
         "--proveMates",
         action="store_true",
         help='Attempt to prove that mate PV lines have no better defence. Proven mates are indicated with "CHECKMATE" at the end of the PV, whereas unproven ones use "checkmate".',
@@ -682,6 +707,7 @@ if __name__ == "__main__":
             concurrency=args.concurrency,
             evalDecay=args.evalDecay,
             cursedWins=args.cursedWins,
+            TBsearch=args.TBsearch,
             proveMates=args.proveMates,
             user=args.user,
         )
