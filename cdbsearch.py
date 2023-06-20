@@ -83,6 +83,7 @@ class ChessDB:
         self.count_queryall = AtomicInteger()
         self.count_uncached = AtomicInteger()
         self.count_enqueued = AtomicInteger()
+        self.count_requeued = AtomicInteger()
         self.count_unscored = AtomicInteger()
         self.count_inflightRequests = AtomicInteger()
         self.count_sumInflightRequests = AtomicInteger()
@@ -390,6 +391,7 @@ class ChessDB:
             asyncio.ensure_future(
                 self.__cdbapicall(f"?action=queue&board={epd}&json=1", timeout=60)
             )
+            self.count_requeued.inc()
 
         # force a query for high depth nodes that do not have a full list of scored moves: we use this to add newly scored moves to our TT
         skipTT_db_moves = None
@@ -568,7 +570,7 @@ async def cdbsearch(
         if proveMates and pv[-1] == "checkmate" and pvlen:
             print("  PV        : ", " ".join(pv[:-1]), end=" ", flush=True)
             if await chessdb.pv_has_proven_mate(board.copy(), pv):
-                mStr = f"(#{(pvlen+1)//2})" if bestscore > 0 else f" (#-{pvlen//2})"
+                mStr = f"(#{(pvlen+1)//2})" if bestscore > 0 else f"(#-{pvlen//2})"
                 print("CHECKMATE", mStr)
             else:
                 print("checkmate")
@@ -589,6 +591,7 @@ async def cdbsearch(
                 f"  chessdbq  :  {uncached} ({uncached / queryall * 100:.2f}% of queryall)"
             )
             print("  enqueued  : ", enqueued)
+            print("  requeued  : ", chessdb.count_requeued.get())
             print(
                 f"  unscored  :  {unscored} ({unscored / max(enqueued, 1) * 100:.2f}% of enqueued)"
             )
