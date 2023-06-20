@@ -369,10 +369,7 @@ class ChessDB:
 
     async def search(self, board, depth):
         """returns (bestscore, pv, maxLevel) for current position stored in board"""
-
-        # the level of the search tree we are in, i.e. how many plies we are away from rootBoard
-        level = len(board.move_stack) - len(self.rootBoard.move_stack)
-
+        
         # the level of the search tree we are in, i.e. how many plies we are away from rootBoard
         level = len(board.move_stack) - len(self.rootBoard.move_stack)
 
