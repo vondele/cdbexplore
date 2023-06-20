@@ -398,7 +398,7 @@ class ChessDB:
             if abs(bestscore) != 1:
                 if abs(bestscore) > CDB_SPECIAL:
                     bestscore -= 1 if bestscore > 0 else -1
-                return bestscore, [bestmove, "EGTB"]
+                return bestscore, [bestmove, "EGTB"], level
 
         scoredCount = len(scored_db_moves) - 1  # number of scored moves for board
         movesCount = len(list(board.legal_moves))  # numer of legal moves
