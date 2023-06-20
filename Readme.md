@@ -68,7 +68,7 @@ PV len     : Length of this PV line in plies.
 level      : Deepest level in search tree reached in the last completed search.
 max level  : Deepest level in search tree reached in all the searches so far.
 queryall   : Number of positions visited in the search tree, with results provided by cdb or the local cache.
-bf         : Branching factor q^(1/(l+1)) computed from queryall q and level l.
+bf         : Branching factor q^(1/d) computed from queryall q and depth d.
 chessdbq   : Number of positions requested to cdb.
 enqueued   : Number of positions that did not exist within cdb but have been added as part of the search.
 requeued   : Number of positions that were re-queued to prompt cdb to provide at least 5 scored moves.
