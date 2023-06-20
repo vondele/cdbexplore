@@ -32,9 +32,11 @@ class AtomicTT:
 
     def set(self, epd, result):
         with self._lock:
-            if epd not in self._cache or self._cache[epd]["depth"] <= result["depth"]:
+            value = self._cache.get(epd)
+            if value is None or value["depth"] <= result["depth"]:
                 self._cache[epd] = result
-            return self._cache[epd]
+                return result
+            return value
 
 
 class AtomicInteger:
@@ -144,7 +146,7 @@ class ChessDB:
     async def add_cdb_pv_positions(self, epd):
         """query cdb for the PV of the position and create a dictionary containing these positions and their distance to the PV leaf for extensions during search"""
         content = await self.__cdbapicall(f"?action=querypv&board={epd}&json=1")
-        if content and content.get("status", None) == "ok" and "pv" in content:
+        if content and content.get("status") == "ok" and "pv" in content:
             pv = content["pv"]
             self.cdbPvToLeaf[epd] = len(pv)
             asyncio.ensure_future(self.queryall(epd))
@@ -369,7 +371,7 @@ class ChessDB:
 
     async def search(self, board, depth):
         """returns (bestscore, pv, maxLevel) for current position stored in board"""
-        
+
         # the level of the search tree we are in, i.e. how many plies we are away from rootBoard
         level = len(board.move_stack) - len(self.rootBoard.move_stack)
 
@@ -426,7 +428,7 @@ class ChessDB:
 
         moves_to_search = 0
         for move in board.legal_moves:
-            score = scored_db_moves.get(move.uci(), None)
+            score = scored_db_moves.get(move.uci())
             newdepth = self.move_depth(bestscore, worstscore, score, depth)
             if newdepth >= 0:
                 moves_to_search += 1
@@ -443,12 +445,12 @@ class ChessDB:
         async with self.semaphoreTree[level]:
             for move in board.legal_moves:
                 ucimove = move.uci()
-                score = scored_db_moves.get(ucimove, None)
+                score = scored_db_moves.get(ucimove)
                 newdepth = self.move_depth(bestscore, worstscore, score, depth)
 
                 # extension if the unique bestmove is the only move to be searched deeper or the position is in the cdb PV
                 if score == bestscore:
-                    cdbPvToLeaf = self.cdbPvToLeaf.get(epd, None)
+                    cdbPvToLeaf = self.cdbPvToLeaf.get(epd)
                     if (moves_to_search == 1 and depth > depthAllowExts) or (
                         cdbPvToLeaf is not None and newdepth < cdbPvToLeaf
                     ):
@@ -490,14 +492,16 @@ class ChessDB:
             skipTT_db_moves = await skipTT_db_moves
             for move in board.legal_moves:
                 ucimove = move.uci()
-                if ucimove in skipTT_db_moves:
-                    if ucimove not in newly_scored_moves:
-                        newly_scored_moves[ucimove] = skipTT_db_moves[ucimove]
+                skipTT_score = skipTT_db_moves.get(ucimove)
+                if skipTT_score is not None:
+                    newly_score = newly_scored_moves.get(ucimove)
+                    if newly_score is None:
+                        newly_scored_moves[ucimove] = skipTT_score
                         minicache[ucimove] = [ucimove]
-                    elif newly_scored_moves[ucimove] != skipTT_db_moves[ucimove]:
+                    elif newly_score != skipTT_score:
                         board.push(move)
                         if self.TT.get(board.epd()) is None:
-                            newly_scored_moves[ucimove] = skipTT_db_moves[ucimove]
+                            newly_scored_moves[ucimove] = skipTT_score
                             minicache[ucimove] = [ucimove]
                         board.pop()
 
