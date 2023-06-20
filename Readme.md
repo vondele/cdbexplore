@@ -14,7 +14,7 @@ Using some concurrency, fairly deep exploration is quickly possible.
 This is a command line program to explore a single position.
 
 ```
-usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--proveMates] [--user USER]
+usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--TBsearch] [--proveMates] [--user USER]
 
 Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position.
 
@@ -29,6 +29,7 @@ options:
   --evalDecay EVALDECAY
                         Depth decrease per cp eval-to-best. A small number will use a very narrow search, 0 will essentially just follow PV lines. A wide search will likely enqueue many positions. (default: 2)
   --cursedWins          Treat cursed wins as wins. (default: False)
+  --TBsearch            Extend the searching and exploration of lines into cdb's EGTB. (default: False)
   --proveMates          Attempt to prove that mate PV lines have no better defence. Proven mates are indicated with "CHECKMATE" at the end of the PV, whereas unproven ones use "checkmate". (default: False)
   --user USER           Add this username to the http user-agent header. (default: None)
 ``` 
@@ -70,6 +71,7 @@ queryall   : Number of positions visited in the search tree, with results provid
 bf         : Branching factor q^(1/(l+1)) computed from queryall q and level l.
 chessdbq   : Number of positions requested to cdb.
 enqueued   : Number of positions that did not exist within cdb but have been added as part of the search.
+requeued   : Number of positions that were re-queued to prompt cdb to provide at least 5 scored moves.
 unscored   : Number of existing unscored moves within cdb that were assigned a score as part of the search.
 reprobed   : Number of positions in local PV lines re-requested to cdb.
 inflightQ  : Number of concurrent queries, guaranteed to return scored moves, made to cdb on average.
@@ -100,6 +102,7 @@ Search at depth  1
   bf        :  1.94
   chessdbq  :  1117 (74.27% of queryall)
   enqueued  :  0
+  requeued  :  0
   unscored  :  0 (0.00% of enqueued)
   reprobed  :  10 (0.90% of chessdbq)
   inflightQ :  9.22
@@ -115,7 +118,7 @@ Search at depth  1
 This is a command line program to sequentially explore several positions.
 
 ```
-usage: cdbbulksearch.py [-h] [--plyBegin PLYBEGIN] [--plyEnd PLYEND] [--shuffle] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--proveMates] [--user USER] [--bulkConcurrency BULKCONCURRENCY] [--forever] [--reload] filename
+usage: cdbbulksearch.py [-h] [--plyBegin PLYBEGIN] [--plyEnd PLYEND] [--shuffle] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--TBsearch] [--proveMates] [--user USER] [--bulkConcurrency BULKCONCURRENCY] [--forever] [--reload] filename
 
 Invoke cdbsearch for positions loaded from a file.
 
@@ -134,6 +137,7 @@ options:
   --evalDecay EVALDECAY
                         Argument passed to cdbsearch. (default: 2)
   --cursedWins          Argument passed to cdbsearch. (default: False)
+  --TBsearch            Argument passed to cdbsearch. (default: False)
   --proveMates          Argument passed to cdbsearch. (default: False)
   --user USER           Argument passed to cdbsearch. (default: None)
   --bulkConcurrency BULKCONCURRENCY
