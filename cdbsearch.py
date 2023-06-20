@@ -368,20 +368,23 @@ class ChessDB:
         return None
 
     async def search(self, board, depth):
-        """returns (bestscore, pv) for current position stored in board"""
+        """returns (bestscore, pv, maxLevel) for current position stored in board"""
+
+        # the level of the search tree we are in, i.e. how many plies we are away from rootBoard
+        level = len(board.move_stack) - len(self.rootBoard.move_stack)
 
         # the level of the search tree we are in, i.e. how many plies we are away from rootBoard
         level = len(board.move_stack) - len(self.rootBoard.move_stack)
 
         t = self.check_trivial_PV(board)
         if t is not None:
-            return t
+            return *t, level
 
         epd = board.epd()
         # get current ranking
         scored_db_moves = await self.queryall(epd)
         if scored_db_moves == {}:
-            return 0, ["invalid"]
+            return 0, ["invalid"], level
 
         # stop search if we are in EGTB and know the result
         if (
@@ -477,11 +480,13 @@ class ChessDB:
                     newly_scored_moves[ucimove] = scored_db_moves[ucimove]
                     minicache[ucimove] = [ucimove]
 
+            maxLevel = level
             # get the results from the futures
             for ucimove, search in tasks.items():
-                s, pv = await search
+                s, pv, l = await search
                 newly_scored_moves[ucimove] = -s
                 minicache[ucimove] = [ucimove] + pv
+                maxLevel = max(maxLevel, l)
 
         # add potentially newly scored moves, or moves we have not explored by search
         if skipTT_db_moves:
@@ -525,7 +530,7 @@ class ChessDB:
         if abs(bestscore) > CDB_SPECIAL:
             bestscore -= 1 if bestscore > 0 else -1
 
-        return bestscore, minicache[bestmove]
+        return bestscore, minicache[bestmove], maxLevel
 
 
 async def cdbsearch(
@@ -582,7 +587,7 @@ async def cdbsearch(
         await chessdb.add_cdb_pv_positions(board.epd())
         print("  cdb PV len: ", chessdb.cdbPvToLeaf.get(board.epd(), 0), flush=True)
         chessdb.rootDepth = depth
-        bestscore, pv = await chessdb.search(board, depth)
+        bestscore, pv, level = await chessdb.search(board, depth)
         # always reprobe the root PV
         asyncio.ensure_future(chessdb.reprobe_PV(board.copy(), pv))
         print("  score     : ", bestscore)
@@ -597,7 +602,8 @@ async def cdbsearch(
         else:
             print("  PV        : ", " ".join(pv))
         print("  PV len    : ", pvlen)
-        print("  max ply   : ", len(chessdb.semaphoreTree))
+        print("  level     : ", level)
+        print("  max level : ", len(chessdb.semaphoreTree))
         queryall = chessdb.count_queryall.get()
         if queryall:
             uncached = chessdb.count_uncached.get()
@@ -606,7 +612,7 @@ async def cdbsearch(
             unscored = chessdb.count_unscored.get()
             runtime = time.perf_counter() - chessdb.count_starttime
             print("  queryall  : ", queryall)
-            print(f"  bf        :  {queryall**(1/depth):.2f}")
+            print(f"  bf        :  {queryall**(1/(level+1)):.2f}")
             print(
                 f"  chessdbq  :  {uncached} ({uncached / queryall * 100:.2f}% of queryall)"
             )
