@@ -386,7 +386,7 @@ class ChessDB:
         # stop search if we are in EGTB and know the result
         if (
             not self.TBsearch
-            and sum(p in "pnbrqk" for p in board.epd().lower().split()[0]) <= CDB_EGTB
+            and sum(p in "pnbrqk" for p in epd.lower().split()[0]) <= CDB_EGTB
         ):
             bestmove, bestscore = max(
                 [t for t in scored_db_moves.items() if t[0] != "depth"],
