@@ -613,7 +613,7 @@ async def cdbsearch(
             unscored = chessdb.count_unscored.get()
             runtime = time.perf_counter() - chessdb.count_starttime
             print("  queryall  : ", queryall)
-            print(f"  bf        :  {queryall**(1/(level+1)):.2f}")
+            print(f"  bf        :  {queryall**(1/depth):.2f}")
             print(
                 f"  chessdbq  :  {uncached} ({uncached / queryall * 100:.2f}% of queryall)"
             )
