@@ -45,7 +45,7 @@ Search at depth  12
   level     :  68
   max level :  84
   queryall  :  6830
-  bf        :  1.14
+  bf        :  2.09
   chessdbq  :  2020 (29.58% of queryall)
   enqueued  :  47
   unscored  :  0 (0.00% of enqueued)
@@ -99,7 +99,7 @@ Search at depth  1
   level     :  10
   max level :  10
   queryall  :  1504
-  bf        :  1.94
+  bf        :  1504.00
   chessdbq  :  1117 (74.27% of queryall)
   enqueued  :  0
   requeued  :  0
