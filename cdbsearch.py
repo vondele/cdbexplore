@@ -377,7 +377,7 @@ class ChessDB:
 
         t = self.check_trivial_PV(board)
         if t is not None:
-            return *t, level
+            return t[0], t[1], level
 
         epd = board.epd()
         # get current ranking
