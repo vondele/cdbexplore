@@ -37,25 +37,26 @@ options:
 Sample output:
 
 ```
-Search at depth  12
-  cdb PV len:  39
-  score     :  141
-  PV        :  d7d5 e2e3 b8c6 f1e2 e7e5 d2d4 h7h5 g4g5 d8g5 g1f3 g5g6 d4e5 c8g4 h1g1 g6e6 b1d2 g8h6 f3d4 e6e5 d2f3 e5f6 d4c6 f6c6 d1d4 f7f6
-  PV len    :  25
-  level     :  68
-  max level :  84
-  queryall  :  6830
-  bf        :  2.09
-  chessdbq  :  2020 (29.58% of queryall)
-  enqueued  :  47
+Search at depth  8
+  cdb PV len:  70
+  score     :  143
+  PV        :  d7d5 e2e3 b8c6 d2d4 e7e5 b1c3 c8e6 d4e5 c6e5 h2h3 h7h5 g1f3 e5f3 d1f3 h5g4 h3g4 e6g4 f3g2 h8h1 g2h1 g8f6 c1d2 d8d6 c3b5 d6b6 f2f3 a7a6 b5c3 g4f5
+  PV len    :  29
+  level     :  39
+  max level :  47
+  queryall  :  1596
+  bf        :  2.51
+  chessdbq  :  578 (36.22% of queryall)
+  enqueued  :  8
+  requeued  :  0
   unscored  :  0 (0.00% of enqueued)
-  reprobed  :  163 (8.07% of chessdbq)
-  inflightQ :  80.27
-  inflightR :  10.56
-  cdb time  :  120
-  date      :  2023-06-18T18:56:24.547853
-  total time:  0:04:03.78
-  URL       :  https://chessdb.cn/queryc_en/?rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR_w_KQkq_-_moves_g2g4_d7d5_e2e3_b8c6_f1e2_e7e5_d2d4_h7h5_g4g5_d8g5_g1f3_g5g6_d4e5_c8g4_h1g1_g6e6_b1d2_g8h6_f3d4_e6e5_d2f3_e5f6_d4c6_f6c6_d1d4_f7f6
+  reprobed  :  75 (12.98% of chessdbq)
+  inflightQ :  26.69
+  inflightR :  8.21
+  cdb time  :  223
+  date      :  2023-06-21T08:17:28.101875
+  total time:  0:02:09.36
+  URL       :  https://chessdb.cn/queryc_en/?rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR_w_KQkq_-_moves_g2g4_d7d5_e2e3_b8c6_d2d4_e7e5_b1c3_c8e6_d4e5_c6e5_h2h3_h7h5_g1f3_e5f3_d1f3_h5g4_h3g4_e6g4_f3g2_h8h1_g2h1_g8f6_c1d2_d8d6_c3b5_d6b6_f2f3_a7a6_b5c3_g4f5
 ```
 
 Meaning of the fields:

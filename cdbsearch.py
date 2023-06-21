@@ -13,9 +13,9 @@ CDB_EGTB = 7  # maximum number of pieces for wdl and dtz EGTB's
 CDB_SIEVED = 5  # minimum number of scored moves for an analysed position
 
 # some (depth) constants that trigger certain events in search
-depthForceQuery = 10  # force queryall if unscored moves exist and depths exceeds this
+depthForceQuery = 10  # force queryall if unscored moves exist and depth exceeds this
 depthAllowExts = 4  # allow extension of the unique bestmove if depth exceeds this
-depthMaxExtension = 10  # maximum number of extensions allowed in a searched line
+depthMaxExtension = 10  # maximum number of extensions allowed in a non-PV line
 depthUnscored = 25  # score an unscored move if depth - scoredCount exceeds this
 depthReprobePV = 16  # do not call reprobe_PV when depth is smaller than this
 percentReprobePV = 1  # % of queryall API calls we are willing to use for reprobe_PV
@@ -437,6 +437,7 @@ class ChessDB:
         minicache = {}  # store candidate PVs for all newly scored moves
         tasks = {}
         allowUnscored = scoredCount >= CDB_SIEVED  # allow search of unscored moves
+        allowMaxExtension = True
 
         # guarantee sufficient length of the semaphoreTree list, and limit the number of threads that can be created at each level of the search tree
         while len(self.semaphoreTree) < level + 1:
@@ -456,9 +457,12 @@ class ChessDB:
                     ):
                         newdepth += 1
 
-                # no extensions beyond depthMaxExtension
-                if level >= self.rootDepth + depthMaxExtension:
-                    newdepth = -1
+                # no extensions beyond depthMaxExtension, unless we are in PV line
+                if newdepth >= 0 and level >= self.rootDepth + depthMaxExtension:
+                    if not allowMaxExtension or score is None or score < bestscore:
+                        newdepth = -1
+                    else:
+                        allowMaxExtension = False
 
                 # schedule qualifying moves for deeper searches, at most 1 unscored move
                 # for sufficiently large depth and suffiently small scoredCount we possibly schedule an unscored move
