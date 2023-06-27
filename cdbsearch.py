@@ -355,6 +355,8 @@ class ChessDB:
     def move_depth(self, bestscore, worstscore, score, depth):
         """returns depth - 1 for bestmove and negative values for bad moves, terminating their search; unscored moves are treated worse than worstmove, returning at most 0"""
         delta = score - bestscore if score is not None else worstscore - bestscore
+        if delta == 0 and bestscore == 0:  # avoid growth of shuffle subtrees
+            delta = -1
         decay = delta // self.evalDecay if self.evalDecay != 0 else 10**6 * delta
         return depth + decay - 1 if score is not None else min(0, depth + decay - 2)
 
