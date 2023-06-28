@@ -355,8 +355,6 @@ class ChessDB:
     def move_depth(self, bestscore, worstscore, score, depth):
         """returns depth - 1 for bestmove and negative values for bad moves, terminating their search; unscored moves are treated worse than worstmove, returning at most 0"""
         delta = score - bestscore if score is not None else worstscore - bestscore
-        if delta == 0 and bestscore == 0:  # avoid growth of shuffle subtrees
-            delta = -1
         decay = delta // self.evalDecay if self.evalDecay != 0 else 10**6 * delta
         return depth + decay - 1 if score is not None else min(0, depth + decay - 2)
 
@@ -440,6 +438,7 @@ class ChessDB:
         tasks = {}
         allowUnscored = scoredCount >= CDB_SIEVED  # allow search of unscored moves
         allowMaxExtension = True
+        inhibitDrawGrowth = False
 
         # guarantee sufficient length of the semaphoreTree list, and limit the number of threads that can be created at each level of the search tree
         while len(self.semaphoreTree) < level + 1:
@@ -465,6 +464,13 @@ class ChessDB:
                         newdepth = -1
                     else:
                         allowMaxExtension = False
+
+                # inhibit the growth of completely drawn subtrees: only a single PV line is not restricted
+                if bestscore == 0 and score is not None and score == 0:
+                    if inhibitDrawGrowth:
+                        newdepth -= 1
+                    else:
+                        inhibitDrawGrowth = True
 
                 # schedule qualifying moves for deeper searches, at most 1 unscored move
                 # for sufficiently large depth and suffiently small scoredCount we possibly schedule an unscored move
