@@ -303,9 +303,7 @@ class ChessDB:
                 continue
 
             elif content["status"] == "rate limit exceeded":
-                # special case, request to clear the limit
-                await self.__cdbapicall("?action=clearlimit", timeout)
-                lasterror = "Asked to clearlimit"
+                lasterror = "Rate limit exceeded"
                 continue
 
             elif content["status"] == "ok":
