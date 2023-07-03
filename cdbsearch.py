@@ -19,6 +19,7 @@ depthMaxExtension = 10  # maximum number of extensions allowed in a non-PV line
 depthUnscored = 25  # score an unscored move if depth - scoredCount exceeds this
 depthReprobePV = 16  # do not call reprobe_PV when depth is smaller than this
 percentReprobePV = 1  # % of queryall API calls we are willing to use for reprobe_PV
+maxTimeOut = 60  # maximum timeout (+ sleep) value in seconds for (failed) API requests
 
 
 class AtomicTT:
@@ -106,10 +107,8 @@ class ChessDB:
         # a dictionary storing the distance to leaf for positions on cdb PVs
         self.cdbPvToLeaf = {}
 
-        # a semaphore to limit the number of concurrent accesses to the API
-        # strictly for the apicall
-        self.semaphoreWork = asyncio.Semaphore(self.concurrency)
-        # 4x for the Queryall
+        # semaphores to limit the number of concurrent accesses to the API, and to our own queryall wrapper
+        self.semaphoreAPI = asyncio.Semaphore(self.concurrency)
         self.semaphoreQueryall = asyncio.Semaphore(4 * self.concurrency)
 
         # a thread pool to do some of the blocking IO (TODO: look into aiohttp)
@@ -138,7 +137,7 @@ class ChessDB:
 
     async def __cdbapicall(self, action, timeout=15):
         """co-routine to access the API"""
-        async with self.semaphoreWork:
+        async with self.semaphoreAPI:
             return await asyncio.get_running_loop().run_in_executor(
                 self.executorWork,
                 self.__apicall,
@@ -253,9 +252,9 @@ class ChessDB:
             while not found:
                 # sleep a bit before further requests
                 if not first:
-                    # adjust timeout increasing after every attempt, up to a max.
-                    if timeout < 60:
-                        timeout = timeout * 1.5
+                    # increase timeout after every attempt, up to a maximum
+                    if timeout < maxTimeOut:
+                        timeout = min(timeout * 1.5, maxTimeOut)
                     else:
                         print(
                             datetime.now().isoformat(),
