@@ -107,7 +107,10 @@ class ChessDB:
         self.cdbPvToLeaf = {}
 
         # a semaphore to limit the number of concurrent accesses to the API
+        # strictly for the apicall
         self.semaphoreWork = asyncio.Semaphore(self.concurrency)
+        # 4x for the Queryall
+        self.semaphoreQueryall = asyncio.Semaphore(4 * self.concurrency)
 
         # a thread pool to do some of the blocking IO (TODO: look into aiohttp)
         self.executorWork = concurrent.futures.ThreadPoolExecutor(
@@ -235,111 +238,112 @@ class ChessDB:
             if result is not None:
                 return result
 
-        self.count_uncached.inc()
-        self.count_sumInflightRequests.inc(self.count_inflightRequests.get())
-        self.count_inflightUncached.inc()
-        self.count_sumInflightUncached.inc(self.count_inflightUncached.get())
+        async with self.semaphoreQueryall:
+            self.count_uncached.inc()
+            self.count_sumInflightRequests.inc(self.count_inflightRequests.get())
+            self.count_inflightUncached.inc()
+            self.count_sumInflightUncached.inc(self.count_inflightUncached.get())
 
-        timeout = 5
-        found = enqueued = False
-        first = True
-        result = {"depth": 0}
-        lasterror = ""
+            timeout = 5
+            found = enqueued = False
+            first = True
+            result = {"depth": 0}
+            lasterror = ""
 
-        while not found:
-            # sleep a bit before further requests
-            if not first:
-                # adjust timeout increasing after every attempt, up to a max.
-                if timeout < 60:
-                    timeout = timeout * 1.5
+            while not found:
+                # sleep a bit before further requests
+                if not first:
+                    # adjust timeout increasing after every attempt, up to a max.
+                    if timeout < 60:
+                        timeout = timeout * 1.5
+                    else:
+                        print(
+                            datetime.now().isoformat(),
+                            " - failed to get reply for : ",
+                            epd,
+                            " last error: ",
+                            lasterror,
+                            flush=True,
+                        )
+                    await asyncio.sleep(timeout)
                 else:
-                    print(
-                        datetime.now().isoformat(),
-                        " - failed to get reply for : ",
-                        epd,
-                        " last error: ",
-                        lasterror,
-                        flush=True,
-                    )
-                await asyncio.sleep(timeout)
-            else:
-                first = False
-
-            content = await self.__cdbapicall(
-                f"?action=queryall&board={epd}&json=1", timeout
-            )
-
-            if content is None:
-                lasterror = "Something went wrong with queryall"
-                continue
-
-            if "status" not in content:
-                lasterror = "Malformed reply, not containing status"
-                continue
-
-            if content["status"] == "unknown":
-                # unknown position, queue and see again
-                if not enqueued:
-                    enqueued = True
-                    self.count_enqueued.inc()
+                    first = False
 
                 content = await self.__cdbapicall(
-                    f"?action=queue&board={epd}&json=1", timeout
+                    f"?action=queryall&board={epd}&json=1", timeout
                 )
+
                 if content is None:
-                    lasterror = "Something went wrong with queue"
+                    lasterror = "Something went wrong with queryall"
                     continue
 
-                if content == {}:
-                    # the position is not available in cdb (EGTB w/ castling rights) - score all moves as 1cp, and let search figure it out
+                if "status" not in content:
+                    lasterror = "Malformed reply, not containing status"
+                    continue
+
+                if content["status"] == "unknown":
+                    # unknown position, queue and see again
+                    if not enqueued:
+                        enqueued = True
+                        self.count_enqueued.inc()
+
+                    content = await self.__cdbapicall(
+                        f"?action=queue&board={epd}&json=1", timeout
+                    )
+                    if content is None:
+                        lasterror = "Something went wrong with queue"
+                        continue
+
+                    if content == {}:
+                        # the position is not available in cdb (EGTB w/ castling rights) - score all moves as 1cp, and let search figure it out
+                        found = True
+                        board = chess.Board(epd)
+                        for move in board.legal_moves:
+                            result[move.uci()] = 1  # we reserve 0 for EGTB draws
+                        lasterror = "Position not queued"
+                        continue
+
+                    lasterror = "Enqueued position"
+                    continue
+
+                elif content["status"] == "rate limit exceeded":
+                    lasterror = "Rate limit exceeded"
+                    continue
+
+                elif content["status"] == "ok":
                     found = True
-                    board = chess.Board(epd)
-                    for move in board.legal_moves:
-                        result[move.uci()] = 1  # we reserve 0 for EGTB draws
-                    lasterror = "Position not queued"
+                    try:
+                        for m in content["moves"]:
+                            s = m["score"]
+                            if abs(s) >= CDB_SPECIAL:
+                                if not self.cursedWins and abs(s) <= CDB_CURSED:
+                                    # cursed wins are TB mates that run afoul of 50mr
+                                    s = 0
+                                else:
+                                    # to stay in sync with cdb evals, we need to counter-act the bestscore off-set applied later on
+                                    s += 1 if s >= 0 else -1
+                            result[m["uci"]] = s
+                    except Exception:
+                        # we do not trust possibly partial move information
+                        found = False
+                        result = {"depth": 0}
+                        lasterror = "Unexpected or malformed json reply"
+                        continue
+
+                elif content["status"] in ["checkmate", "stalemate"]:
+                    found = True
+
+                elif content["status"] == "invalid board":
+                    result = {}
+                    found = True
+
+                else:
+                    lasterror = "Surprise reply"
                     continue
 
-                lasterror = "Enqueued position"
-                continue
-
-            elif content["status"] == "rate limit exceeded":
-                lasterror = "Rate limit exceeded"
-                continue
-
-            elif content["status"] == "ok":
-                found = True
-                try:
-                    for m in content["moves"]:
-                        s = m["score"]
-                        if abs(s) >= CDB_SPECIAL:
-                            if not self.cursedWins and abs(s) <= CDB_CURSED:
-                                # cursed wins are TB mates that run afoul of 50mr
-                                s = 0
-                            else:
-                                # to stay in sync with cdb evals, we need to counter-act the bestscore off-set applied later on
-                                s += 1 if s >= 0 else -1
-                        result[m["uci"]] = s
-                except Exception:
-                    # we do not trust possibly partial move information
-                    found = False
-                    result = {"depth": 0}
-                    lasterror = "Unexpected or malformed json reply"
-                    continue
-
-            elif content["status"] in ["checkmate", "stalemate"]:
-                found = True
-
-            elif content["status"] == "invalid board":
-                result = {}
-                found = True
-
-            else:
-                lasterror = "Surprise reply"
-                continue
-
-        self.count_inflightUncached.dec()
-        # set and return a possibly even deeper result
-        return self.TT.set(epd, result)
+            self.count_inflightUncached.dec()
+            # set and return a possibly even deeper result
+            return self.TT.set(epd, result)
 
     async def reprobe_PV(self, board, pv):
         """query all positions along the PV, starting from its leaf and all the way back to the start position of rootBoard"""
