@@ -198,6 +198,12 @@ if __name__ == "__main__":
         help="Pass positions from filename to cdbsearch in an infinite loop, increasing depthLimit by one after each completed cycle.",
     )
     argParser.add_argument(
+        "--maxDepthLimit",
+        help="Upper bound for dynamically increasing depthLimit.",
+        type=int,
+        default=None,
+    )
+    argParser.add_argument(
         "--reload",
         action="store_true",
         help="Reload positions from filename when tasks for new cycle are needed.",
@@ -254,6 +260,8 @@ if __name__ == "__main__":
                     first = False
                 else:
                     depthLimit += 1
+                    if args.maxDepthLimit is not None:
+                        depthLimit = min(depthLimit, args.maxDepthLimit)
                 epdIdx = 0
             elif task is None and len(tasks) == 0:
                 break
