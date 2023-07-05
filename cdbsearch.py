@@ -439,6 +439,7 @@ class ChessDB:
         tasks = {}
         allowUnscored = scoredCount >= CDB_SIEVED  # allow search of unscored moves
         allowMaxExtension = True
+        inhibitDrawGrowth = False
 
         # guarantee sufficient length of the semaphoreTree list, and limit the number of threads that can be created at each level of the search tree
         while len(self.semaphoreTree) < level + 1:
@@ -464,6 +465,13 @@ class ChessDB:
                         newdepth = -1
                     else:
                         allowMaxExtension = False
+
+                # inhibit the growth of completely drawn subtrees: only a single PV line is not restricted
+                if bestscore == 0 and score is not None and score == 0:
+                    if inhibitDrawGrowth:
+                        newdepth -= 1
+                    else:
+                        inhibitDrawGrowth = True
 
                 # schedule qualifying moves for deeper searches, at most 1 unscored move
                 # for sufficiently large depth and suffiently small scoredCount we possibly schedule an unscored move
