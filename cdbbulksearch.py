@@ -54,6 +54,7 @@ def load_epds(filename, plyBegin=-1, plyEnd=None):
                 if line:
                     if line.startswith("#"):  # ignore comments
                         continue
+                    line = line.split(";")[0]  # ignore epd opcodes
                     epd, _, moves = line.partition("moves")
                     epd = epd.split()[:6]  # include potential move counters
                     if len(epd) == 6 and not (
