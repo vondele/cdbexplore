@@ -78,7 +78,7 @@ def load_epds(filename, plyBegin=-1, plyEnd=None):
                     epdlist.append(epd)
         print(f"Loaded {len(epdlist)} (extended) EPDs from file {args.filename}.")
 
-    epds = {}  # use a dict to filter duplicates
+    epds = set()  # use a set to filter duplicates
     for epd in epdlist:
         epd, _, moves = epd.partition(" moves")
         moves = [None] + moves.split()  # to be able to use plyBegin=0 for epd
@@ -100,10 +100,10 @@ def load_epds(filename, plyBegin=-1, plyEnd=None):
             if m is not None:
                 epd += f" {m}"
             if plyB <= ply and ply < plyE:
-                epds.update({epd: None})
+                epds.add(epd)
             if m is None:
                 epd += " moves"
-    epds = list(epds.keys())
+    epds = list(epds)
 
     print(f"Loaded {len(epds)} unique EPDs from file {args.filename}.")
     return epds
