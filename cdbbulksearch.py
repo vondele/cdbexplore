@@ -261,8 +261,8 @@ if __name__ == "__main__":
                     first = False
                 else:
                     depthLimit += 1
-                    if args.maxDepthLimit is not None:
-                        depthLimit = min(depthLimit, args.maxDepthLimit)
+                if args.maxDepthLimit is not None:
+                    depthLimit = min(depthLimit, args.maxDepthLimit)
                 epdIdx = 0
             elif task is None and len(tasks) == 0:
                 break
