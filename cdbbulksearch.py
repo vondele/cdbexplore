@@ -1,7 +1,6 @@
-import argparse, sys, signal, asyncio, concurrent.futures
+import asyncio, argparse, concurrent.futures, gzip, random, signal, sys
 import chess, chess.pgn
 import cdbsearch
-import random
 from io import StringIO
 from multiprocessing import freeze_support, active_children
 from collections import deque
@@ -30,11 +29,17 @@ def wrapcdbsearch(
     return mystdout.getvalue()
 
 
+def open_file_rt(filename):
+    # allow reading text files either plain or in gzip format
+    open_func = gzip.open if filename.endswith(".gz") else open
+    return open_func(filename, "rt")
+
+
 def load_epds(filename, plyBegin=-1, plyEnd=None):
     """returns a list of unique EPDs found in the given file"""
     epdlist = []
-    if filename.endswith(".pgn"):
-        pgn = open(args.filename)
+    if filename.endswith(".pgn") or filename.endswith(".pgn.gz"):
+        pgn = open_file_rt(args.filename)
         while True:
             game = chess.pgn.read_game(pgn)
             if game is None:
@@ -48,7 +53,7 @@ def load_epds(filename, plyBegin=-1, plyEnd=None):
             epdlist.append(epd)
         print(f"Loaded {len(epdlist)} (opening) lines from file {args.filename}.")
     else:
-        with open(args.filename) as f:
+        with open_file_rt(args.filename) as f:
             for line in f:
                 line = line.strip()
                 if line:
@@ -131,7 +136,7 @@ if __name__ == "__main__":
     )
     argParser.add_argument(
         "filename",
-        help="""PGN file if suffix is .pgn, o/w a text file with FENs/EPDs. The latter may use the extended "moves m1 m2 m3" syntax from cdb's API.""",
+        help="""PGN file if suffix is .pgn(.gz), o/w a file with FENs/EPDs. The latter may use the extended "moves m1 m2 m3" syntax from cdb's API.""",
     )
     argParser.add_argument(
         "--plyBegin",
