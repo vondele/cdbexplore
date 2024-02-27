@@ -39,7 +39,7 @@ def load_epds(filename, plyBegin=-1, plyEnd=None):
     """returns a list of unique EPDs found in the given file"""
     epdlist = []
     if filename.endswith(".pgn") or filename.endswith(".pgn.gz"):
-        pgn = open_file_rt(args.filename)
+        pgn = open_file_rt(filename)
         while True:
             game = chess.pgn.read_game(pgn)
             if game is None:
@@ -51,9 +51,9 @@ def load_epds(filename, plyBegin=-1, plyEnd=None):
             if epdMoves != " moves":
                 epd += epdMoves
             epdlist.append(epd)
-        print(f"Loaded {len(epdlist)} (opening) lines from file {args.filename}.")
+        print(f"Loaded {len(epdlist)} (opening) lines from file {filename}.")
     else:
-        with open_file_rt(args.filename) as f:
+        with open_file_rt(filename) as f:
             for line in f:
                 line = line.strip()
                 if line:
@@ -81,7 +81,7 @@ def load_epds(filename, plyBegin=-1, plyEnd=None):
                     if epdMoves != " moves":
                         epd += epdMoves
                     epdlist.append(epd)
-        print(f"Loaded {len(epdlist)} (extended) EPDs from file {args.filename}.")
+        print(f"Loaded {len(epdlist)} (extended) EPDs from file {filename}.")
 
     epds = set()  # use a set to filter duplicates
     for epd in epdlist:
@@ -98,7 +98,7 @@ def load_epds(filename, plyBegin=-1, plyEnd=None):
             len(moves)
             if plyEnd is None
             else max(0, plyEnd + len(moves))
-            if plyE < 0
+            if plyEnd < 0
             else min(plyEnd, len(moves))
         )
         for ply, m in enumerate(moves):
@@ -106,11 +106,13 @@ def load_epds(filename, plyBegin=-1, plyEnd=None):
                 epd += f" {m}"
             if plyB <= ply and ply < plyE:
                 epds.add(epd)
+            elif ply >= plyE:
+                break
             if m is None:
                 epd += " moves"
     epds = list(epds)
 
-    print(f"Loaded {len(epds)} unique EPDs from file {args.filename}.")
+    print(f"Loaded {len(epds)} unique EPDs from file {filename}.")
     return epds
 
 
