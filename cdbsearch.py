@@ -622,13 +622,13 @@ async def cdbsearch(
         print("  PV len    : ", pvlen)
         print("  level     : ", level)
         print("  max level : ", len(chessdb.semaphoreTree))
+        runtime = time.perf_counter() - chessdb.count_starttime
         queryall = chessdb.count_queryall.get()
         if queryall:
             uncached = chessdb.count_uncached.get()
             reprobed = chessdb.count_reprobeQueryall.get()
             enqueued = chessdb.count_enqueued.get()
             unscored = chessdb.count_unscored.get()
-            runtime = time.perf_counter() - chessdb.count_starttime
             print("  queryall  : ", queryall)
             print(f"  bf        :  {queryall**(1/depth):.2f}")
             print(
