@@ -7,7 +7,7 @@ from collections import deque
 
 
 def wrapcdbsearch(
-    epd, depthLimit, concurrency, evalDecay, cursedWins, TBsearch, proveMates
+    epd, depthLimit, timeLimit, concurrency, evalDecay, cursedWins, TBsearch, proveMates
 ):
     old_stdout = sys.stdout
     sys.stdout = mystdout = StringIO()
@@ -16,6 +16,7 @@ def wrapcdbsearch(
             cdbsearch.cdbsearch(
                 epd=epd,
                 depthLimit=depthLimit,
+                timeLimit=timeLimit,
                 concurrency=concurrency,
                 evalDecay=evalDecay,
                 cursedWins=cursedWins,
@@ -164,6 +165,12 @@ if __name__ == "__main__":
         default=5,
     )
     argParser.add_argument(
+        "--timeLimit",
+        help="Argument passed to cdbsearch.",
+        type=float,
+        default=None,
+    )
+    argParser.add_argument(
         "--concurrency",
         help="Argument passed to cdbsearch.",
         type=int,
@@ -281,6 +288,7 @@ if __name__ == "__main__":
                     wrapcdbsearch,
                     epd=epd,
                     depthLimit=depthLimit,
+                    timeLimit=args.timeLimit,
                     concurrency=args.concurrency,
                     evalDecay=args.evalDecay,
                     cursedWins=args.cursedWins,
