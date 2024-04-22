@@ -14,7 +14,7 @@ Using some concurrency, fairly deep exploration is quickly possible.
 This is a command line program to explore a single position.
 
 ```
-usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--TBsearch] [--proveMates] [--user USER]
+usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--depthLimit DEPTHLIMIT] [--timeLimit TIMELIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--TBsearch] [--proveMates] [--user USER]
 
 Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position.
 
@@ -24,8 +24,10 @@ options:
   --san SAN             Moves in SAN notation that lead to the position to be explored. E.g. "1. g4". (default: None)
   --depthLimit DEPTHLIMIT
                         Finish the exploration at the specified depth. (default: None)
+  --timeLimit TIMELIMIT
+                        Do not start a search at higher depth if this limit (in seconds) is exceeded. (default: None)
   --concurrency CONCURRENCY
-                        Concurrency of requests. This is the maximum number of http requests made to chessdb at the same time. (default: 16)
+                        Concurrency of requests. This is the maximum number of requests made to chessdb at the same time. (default: 16)
   --evalDecay EVALDECAY
                         Depth decrease per cp eval-to-best. A small number will use a very narrow search, 0 will essentially just follow PV lines. A wide search will likely enqueue many positions. (default: 2)
   --cursedWins          Treat cursed wins as wins. (default: False)
@@ -119,12 +121,12 @@ Search at depth  1
 This is a command line program to sequentially explore several positions.
 
 ```
-usage: cdbbulksearch.py [-h] [--plyBegin PLYBEGIN] [--plyEnd PLYEND] [--shuffle] [--depthLimit DEPTHLIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--TBsearch] [--proveMates] [--user USER] [--bulkConcurrency BULKCONCURRENCY] [--forever] [--maxDepthLimit MAXDEPTHLIMIT] [--reload] filename
+usage: cdbbulksearch.py [-h] [--plyBegin PLYBEGIN] [--plyEnd PLYEND] [--shuffle] [--depthLimit DEPTHLIMIT] [--timeLimit TIMELIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--TBsearch] [--proveMates] [--user USER] [--bulkConcurrency BULKCONCURRENCY] [--forever] [--maxDepthLimit MAXDEPTHLIMIT] [--reload] filename
 
 Invoke cdbsearch for positions loaded from a file.
 
 positional arguments:
-  filename              PGN file if suffix is .pgn, o/w a text file with FENs/EPDs. The latter may use the extended "moves m1 m2 m3" syntax from cdb's API.
+  filename              PGN file if suffix is .pgn(.gz), o/w a file with FENs/EPDs. The latter may use the extended "moves m1 m2 m3" syntax from cdb's API.
 
 options:
   -h, --help            show this help message and exit
@@ -133,6 +135,8 @@ options:
   --shuffle             Shuffle the positions to be searched randomly. (default: False)
   --depthLimit DEPTHLIMIT
                         Argument passed to cdbsearch. (default: 5)
+  --timeLimit TIMELIMIT
+                        Argument passed to cdbsearch. (default: None)
   --concurrency CONCURRENCY
                         Argument passed to cdbsearch. (default: 16)
   --evalDecay EVALDECAY
@@ -147,6 +151,7 @@ options:
   --maxDepthLimit MAXDEPTHLIMIT
                         Upper bound for dynamically increasing depthLimit. (default: None)
   --reload              Reload positions from filename when tasks for new cycle are needed. (default: False)
+
 ```
 
 Example:

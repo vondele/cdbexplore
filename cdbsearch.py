@@ -550,6 +550,7 @@ class ChessDB:
 async def cdbsearch(
     epd,
     depthLimit,
+    timeLimit,
     concurrency,
     evalDecay,
     cursedWins=False,
@@ -596,7 +597,10 @@ async def cdbsearch(
     )
 
     depth = 1
-    while depthLimit is None or depth <= depthLimit:
+    runtime = 0
+    while (depthLimit is None or depth <= depthLimit) and (
+        timeLimit is None or runtime <= timeLimit
+    ):
         print("Search at depth ", depth)
         await chessdb.add_cdb_pv_positions(board.epd())
         print("  cdb PV len: ", chessdb.cdbPvToLeaf.get(board.epd(), 0), flush=True)
@@ -683,6 +687,12 @@ if __name__ == "__main__":
         default=None,
     )
     argParser.add_argument(
+        "--timeLimit",
+        help="Do not start a search at higher depth if this limit (in seconds) is exceeded.",
+        type=float,
+        default=None,
+    )
+    argParser.add_argument(
         "--concurrency",
         help="Concurrency of requests. This is the maximum number of requests made to chessdb at the same time.",
         type=int,
@@ -730,6 +740,7 @@ if __name__ == "__main__":
         cdbsearch(
             epd=epd,
             depthLimit=args.depthLimit,
+            timeLimit=args.timeLimit,
             concurrency=args.concurrency,
             evalDecay=args.evalDecay,
             cursedWins=args.cursedWins,
