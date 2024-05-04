@@ -5,6 +5,8 @@ from io import StringIO
 from multiprocessing import freeze_support, active_children
 from collections import deque
 
+CDB_EGTB = 7
+
 
 def wrapcdbsearch(
     epd, depthLimit, timeLimit, concurrency, evalDecay, cursedWins, TBsearch, proveMates
@@ -36,7 +38,7 @@ def open_file_rt(filename):
     return open_func(filename, "rt")
 
 
-def load_epds(filename, plyBegin=-1, plyEnd=None):
+def load_epds(filename, plyBegin=-1, plyEnd=None, TBsearch=False):
     """returns a list of unique EPDs found in the given file"""
     epdlist = []
     if filename.endswith(".pgn") or filename.endswith(".pgn.gz"):
@@ -102,9 +104,17 @@ def load_epds(filename, plyBegin=-1, plyEnd=None):
             if plyEnd < 0
             else min(plyEnd, len(moves))
         )
+        board = chess.Board(epd)
         for ply, m in enumerate(moves):
             if m is not None:
                 epd += f" {m}"
+                board.push(chess.Move.from_uci(m))
+            if (
+                not TBsearch
+                and sum(p in "pnbrqk" for p in board.epd().lower().split()[0])
+                <= CDB_EGTB
+            ):
+                break
             if plyB <= ply and ply < plyE:
                 epds.add(epd)
             elif ply >= plyE:
@@ -260,7 +270,9 @@ if __name__ == "__main__":
             if first or args.forever:
                 if first or args.reload:
                     try:
-                        epds = load_epds(args.filename, args.plyBegin, args.plyEnd)
+                        epds = load_epds(
+                            args.filename, args.plyBegin, args.plyEnd, args.TBsearch
+                        )
                         if args.shuffle:
                             random.shuffle(epds)
                     except Exception:
