@@ -9,7 +9,16 @@ CDB_EGTB = 7
 
 
 def wrapcdbsearch(
-    epd, depthLimit, timeLimit, concurrency, evalDecay, cursedWins, TBsearch, proveMates
+    epd,
+    depthLimit,
+    timeLimit,
+    concurrency,
+    evalDecay,
+    cursedWins,
+    TBsearch,
+    proveMates,
+    user,
+    suppressErrors,
 ):
     old_stdout = sys.stdout
     sys.stdout = mystdout = StringIO()
@@ -24,6 +33,8 @@ def wrapcdbsearch(
                 cursedWins=cursedWins,
                 TBsearch=TBsearch,
                 proveMates=proveMates,
+                user=user,
+                suppressErrors=suppressErrors,
             )
         )
     except Exception as ex:
@@ -212,6 +223,11 @@ if __name__ == "__main__":
         help="Argument passed to cdbsearch.",
     )
     argParser.add_argument(
+        "--suppressErrors",
+        action="store_true",
+        help="Argument passed to cdbsearch.",
+    )
+    argParser.add_argument(
         "--bulkConcurrency",
         help="Number of concurrent processes running cdbsearch.",
         type=int,
@@ -306,6 +322,8 @@ if __name__ == "__main__":
                     cursedWins=args.cursedWins,
                     TBsearch=args.TBsearch,
                     proveMates=args.proveMates,
+                    user=args.user,
+                    suppressErrors=args.suppressErrors,
                 )
                 taskCounter.inc()
                 future.add_done_callback(taskCounter.dec)

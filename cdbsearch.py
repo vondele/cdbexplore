@@ -72,6 +72,7 @@ class ChessDB:
         TBsearch=False,
         rootBoard=chess.Board(),
         user=None,
+        showErrors=True,
     ):
         # user defined parameters
         self.concurrency = concurrency
@@ -79,6 +80,7 @@ class ChessDB:
         self.cursedWins = cursedWins
         self.TBsearch = TBsearch
         self.user = "" if user is None else str(user)
+        self.showErrors = showErrors
 
         # the board containing as final leaf(!) the root position under which the tree will be built
         self.rootBoard = rootBoard
@@ -255,7 +257,7 @@ class ChessDB:
                     # increase timeout after every attempt, up to a maximum
                     if timeout < maxTimeOut:
                         timeout = min(timeout * 1.5, maxTimeOut)
-                    else:
+                    elif self.showErrors:
                         print(
                             datetime.now().isoformat(),
                             " - failed to get reply for : ",
@@ -557,6 +559,7 @@ async def cdbsearch(
     TBsearch=False,
     proveMates=False,
     user=None,
+    suppressErrors=False,
 ):
     concurrency = max(1, concurrency)
     evalDecay = max(0, evalDecay)
@@ -594,6 +597,7 @@ async def cdbsearch(
         TBsearch=TBsearch,
         rootBoard=board.copy(),
         user=user,
+        showErrors=not suppressErrors,
     )
 
     depth = 1
@@ -723,6 +727,11 @@ if __name__ == "__main__":
         "--user",
         help="Add this username to the http user-agent header.",
     )
+    argParser.add_argument(
+        "--suppressErrors",
+        action="store_true",
+        help="Suppress any error messages resulting from the API calls.",
+    )
     args = argParser.parse_args()
 
     if args.san is not None:
@@ -747,5 +756,6 @@ if __name__ == "__main__":
             TBsearch=args.TBsearch,
             proveMates=args.proveMates,
             user=args.user,
+            suppressErrors=args.suppressErrors,
         )
     )

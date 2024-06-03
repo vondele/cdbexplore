@@ -14,7 +14,7 @@ Using some concurrency, fairly deep exploration is quickly possible.
 This is a command line program to explore a single position.
 
 ```
-usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--depthLimit DEPTHLIMIT] [--timeLimit TIMELIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--TBsearch] [--proveMates] [--user USER]
+usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--depthLimit DEPTHLIMIT] [--timeLimit TIMELIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--TBsearch] [--proveMates] [--user USER] [--suppressErrors]
 
 Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position.
 
@@ -34,6 +34,7 @@ options:
   --TBsearch            Extend the searching and exploration of lines into cdb's EGTB. (default: False)
   --proveMates          Attempt to prove that mate PV lines have no better defence. Proven mates are indicated with "CHECKMATE" at the end of the PV, whereas unproven ones use "checkmate". (default: False)
   --user USER           Add this username to the http user-agent header. (default: None)
+  --suppressErrors      Suppress any error messages resulting from the API calls. (default: False)
 ``` 
 
 Sample output:
@@ -121,7 +122,7 @@ Search at depth  1
 This is a command line program to sequentially explore several positions.
 
 ```
-usage: cdbbulksearch.py [-h] [--plyBegin PLYBEGIN] [--plyEnd PLYEND] [--shuffle] [--depthLimit DEPTHLIMIT] [--timeLimit TIMELIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--TBsearch] [--proveMates] [--user USER] [--bulkConcurrency BULKCONCURRENCY] [--forever] [--maxDepthLimit MAXDEPTHLIMIT] [--reload] filename
+usage: cdbbulksearch.py [-h] [--plyBegin PLYBEGIN] [--plyEnd PLYEND] [--shuffle] [--depthLimit DEPTHLIMIT] [--timeLimit TIMELIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--TBsearch] [--proveMates] [--user USER] [--suppressErrors] [--bulkConcurrency BULKCONCURRENCY] [--forever] [--maxDepthLimit MAXDEPTHLIMIT] [--reload] filename
 
 Invoke cdbsearch for positions loaded from a file.
 
@@ -145,6 +146,7 @@ options:
   --TBsearch            Argument passed to cdbsearch. (default: False)
   --proveMates          Argument passed to cdbsearch. (default: False)
   --user USER           Argument passed to cdbsearch. (default: None)
+  --suppressErrors      Argument passed to cdbsearch. (default: False)
   --bulkConcurrency BULKCONCURRENCY
                         Number of concurrent processes running cdbsearch. (default: 4)
   --forever             Pass positions from filename to cdbsearch in an infinite loop, increasing depthLimit by one after each completed cycle. (default: False)
