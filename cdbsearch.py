@@ -586,8 +586,17 @@ async def cdbsearch(
         epdMoves = []
     epd = epd.strip()  # avoid leading and trailing spaces in URL below
     board = chess.Board(epd)
-    for ucimove in epdMoves:
-        board.push(chess.Move.from_uci(ucimove))
+    pushedMoves = []
+    for move in epdMoves:
+        uci = chess.Move.from_uci(move)
+        if not uci in board.legal_moves:
+            print(
+                f' - Warning: Encountered illegal move {move} at position "{board.epd()}". Ignoring this and all following moves.'
+            )
+            break
+        board.push(uci)
+        pushedMoves.append(move)
+    epdMoves = pushedMoves
 
     # create a ChessDB
     chessdb = ChessDB(
