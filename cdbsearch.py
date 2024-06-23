@@ -389,10 +389,7 @@ class ChessDB:
             return 0, ["invalid"], level
 
         # stop search if we are in EGTB and know the result
-        if (
-            not self.TBsearch
-            and sum(p in "pnbrqk" for p in epd.lower().split()[0]) <= CDB_EGTB
-        ):
+        if not self.TBsearch and chess.popcount(board.occupied) <= CDB_EGTB:
             bestmove, bestscore = max(
                 [t for t in scored_db_moves.items() if t[0] != "depth"],
                 key=lambda t: t[1],
