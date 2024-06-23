@@ -120,11 +120,7 @@ def load_epds(filename, plyBegin=-1, plyEnd=None, TBsearch=False):
             if m is not None:
                 epd += f" {m}"
                 board.push(chess.Move.from_uci(m))
-            if (
-                not TBsearch
-                and sum(p in "pnbrqk" for p in board.epd().lower().split()[0])
-                <= CDB_EGTB
-            ):
+            if not TBsearch and chess.popcount(board.occupied) <= CDB_EGTB:
                 break
             if plyB <= ply and ply < plyE:
                 epds.add(epd)
