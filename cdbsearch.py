@@ -149,8 +149,16 @@ class ChessDB:
 
     async def add_cdb_pv_positions(self, epd):
         """query cdb for the PV of the position and create a dictionary containing these positions and their distance to the PV leaf for extensions during search"""
-        content = await self.__cdbapicall(f"?action=querypv&board={epd}&json=1")
-        if content and content.get("status") == "ok" and "pv" in content:
+        content, first = {}, True
+        while not (content and "status" in content):
+            content = await self.__cdbapicall(
+                f"?action=querypv&board={epd}&stable=1&json=1"
+            )
+            if first:
+                first = False
+            else:
+                await asyncio.sleep(5)
+        if content["status"] == "ok" and "pv" in content:
             pv = content["pv"]
             self.cdbPvToLeaf[epd] = len(pv)
             asyncio.ensure_future(self.queryall(epd))
