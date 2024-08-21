@@ -74,6 +74,7 @@ def load_epds(filename, plyBegin=-1, plyEnd=None, TBsearch=False):
                     if line.startswith("#"):  # ignore comments
                         continue
                     line = line.split(";")[0]  # ignore epd opcodes
+                    line = line.replace("startpos", chess.STARTING_FEN[:-3])
                     epd, _, moves = line.partition("moves")
                     epd = epd.split()[:6]  # include potential move counters
                     if len(epd) == 6 and not (
@@ -156,7 +157,7 @@ if __name__ == "__main__":
     )
     argParser.add_argument(
         "filename",
-        help="""PGN file if suffix is .pgn(.gz), o/w a file with FENs/EPDs. The latter may use the extended "moves m1 m2 m3" syntax from cdb's API.""",
+        help="""PGN file if suffix is .pgn(.gz), o/w a file with FENs/EPDs. The latter may use the extended "['startpos'|FEN] moves m1 m2 m3" syntax.""",
     )
     argParser.add_argument(
         "--plyBegin",
