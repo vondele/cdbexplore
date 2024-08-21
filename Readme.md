@@ -20,7 +20,7 @@ Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Bui
 
 options:
   -h, --help            show this help message and exit
-  --epd EPD             EPD/FEN to explore: acceptable are FENs w/ and w/o move counters, as well as the extended "moves m1 m2 m3" syntax from cdb's API. (default: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - moves g2g4)
+  --epd EPD             EPD/FEN to explore: acceptable are FENs w/ and w/o move counters, as well as the extended "['startpos'|FEN] moves m1 m2 m3" syntax. (default: startpos moves g2g4)
   --san SAN             Moves in SAN notation that lead to the position to be explored. E.g. "1. g4". (default: None)
   --depthLimit DEPTHLIMIT
                         Finish the exploration at the specified depth. (default: None)
@@ -127,7 +127,7 @@ usage: cdbbulksearch.py [-h] [--plyBegin PLYBEGIN] [--plyEnd PLYEND] [--shuffle]
 Invoke cdbsearch for positions loaded from a file.
 
 positional arguments:
-  filename              PGN file if suffix is .pgn(.gz), o/w a file with FENs/EPDs. The latter may use the extended "moves m1 m2 m3" syntax from cdb's API.
+  filename              PGN file if suffix is .pgn(.gz), o/w a file with FENs/EPDs. The latter may use the extended "['startpos'|FEN] moves m1 m2 m3" syntax.
 
 options:
   -h, --help            show this help message and exit

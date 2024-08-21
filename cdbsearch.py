@@ -691,8 +691,8 @@ if __name__ == "__main__":
     group = argParser.add_mutually_exclusive_group()
     group.add_argument(
         "--epd",
-        help="""EPD/FEN to explore: acceptable are FENs w/ and w/o move counters, as well as the extended "moves m1 m2 m3" syntax from cdb's API.""",
-        default=chess.STARTING_FEN[:-3] + "moves g2g4",
+        help="""EPD/FEN to explore: acceptable are FENs w/ and w/o move counters, as well as the extended "['startpos'|FEN] moves m1 m2 m3" syntax.""",
+        default="startpos moves g2g4",
     )
     group.add_argument(
         "--san",
@@ -757,7 +757,7 @@ if __name__ == "__main__":
         else:
             epd = chess.STARTING_FEN  # passing empty string to --san gives startpos
     else:
-        epd = args.epd
+        epd = args.epd.replace("startpos", chess.STARTING_FEN[:-3])
 
     asyncio.run(
         cdbsearch(
