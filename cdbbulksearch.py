@@ -49,7 +49,39 @@ def open_file_rt(filename):
     return open_func(filename, "rt")
 
 
-def load_epds(filename, plyBegin=-1, plyEnd=None, TBsearch=False):
+def load_epdlist(filename):
+    epdlist = []
+    with open_file_rt(filename) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                if line.startswith("#"):  # ignore comments
+                    continue
+                line = line.split(";")[0]  # ignore epd opcodes
+                line = line.replace("startpos", chess.STARTING_FEN[:-3])
+                epd, _, moves = line.partition("moves")
+                epd = epd.split()[:6]  # include potential move counters
+                if len(epd) == 6 and not (epd[4].isnumeric() and epd[5].isnumeric()):
+                    epd = epd[:4]
+                epd = " ".join(epd)
+                epdMoves = " moves"
+                for m in moves.split():
+                    if (
+                        len(m) < 4
+                        or len(m) > 5
+                        or not {m[0], m[2]}.issubset(set("abcdefgh"))
+                        or not {m[1], m[3]}.issubset(set("12345678"))
+                        or (len(m) == 5 and not m[4] in "qrbn")
+                    ):
+                        break
+                    epdMoves += f" {m}"
+                if epdMoves != " moves":
+                    epd += epdMoves
+                epdlist.append(epd)
+    return epdlist
+
+
+def load_epds(filename, excludeFile=None, plyBegin=-1, plyEnd=None, TBsearch=False):
     """returns a list of unique EPDs found in the given file"""
     epdlist = []
     if filename.endswith(".pgn") or filename.endswith(".pgn.gz"):
@@ -67,36 +99,14 @@ def load_epds(filename, plyBegin=-1, plyEnd=None, TBsearch=False):
             epdlist.append(epd)
         print(f"Loaded {len(epdlist)} (opening) lines from file {filename}.")
     else:
-        with open_file_rt(filename) as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    if line.startswith("#"):  # ignore comments
-                        continue
-                    line = line.split(";")[0]  # ignore epd opcodes
-                    line = line.replace("startpos", chess.STARTING_FEN[:-3])
-                    epd, _, moves = line.partition("moves")
-                    epd = epd.split()[:6]  # include potential move counters
-                    if len(epd) == 6 and not (
-                        epd[4].isnumeric() and epd[5].isnumeric()
-                    ):
-                        epd = epd[:4]
-                    epd = " ".join(epd)
-                    epdMoves = " moves"
-                    for m in moves.split():
-                        if (
-                            len(m) < 4
-                            or len(m) > 5
-                            or not {m[0], m[2]}.issubset(set("abcdefgh"))
-                            or not {m[1], m[3]}.issubset(set("12345678"))
-                            or (len(m) == 5 and not m[4] in "qrbn")
-                        ):
-                            break
-                        epdMoves += f" {m}"
-                    if epdMoves != " moves":
-                        epd += epdMoves
-                    epdlist.append(epd)
+        epdlist = load_epdlist(filename)
         print(f"Loaded {len(epdlist)} (extended) EPDs from file {filename}.")
+        if excludeFile:
+            excludelist = load_epdlist(excludeFile)
+            epdlist = list(set(epdlist) - set(excludelist))
+            print(
+                f"Kept {len(epdlist)} (extended) EPDs after excluding EPDs from file {excludeFile}."
+            )
 
     epds = set()  # use a set to filter duplicates
     for epd in epdlist:
@@ -131,7 +141,7 @@ def load_epds(filename, plyBegin=-1, plyEnd=None, TBsearch=False):
                 epd += " moves"
     epds = list(epds)
 
-    print(f"Loaded {len(epds)} unique EPDs from file {filename}.")
+    print(f"Prepared {len(epds)} unique EPDs for exploration.")
     return epds
 
 
@@ -158,6 +168,10 @@ if __name__ == "__main__":
     argParser.add_argument(
         "filename",
         help="""PGN file if suffix is .pgn(.gz), o/w a file with FENs/EPDs. The latter may use the extended "['startpos'|FEN] moves m1 m2 m3" syntax.""",
+    )
+    argParser.add_argument(
+        "--excludeFile",
+        help="A file with FENs/EPDs that should not be loaded from filename.",
     )
     argParser.add_argument(
         "--plyBegin",
@@ -284,7 +298,11 @@ if __name__ == "__main__":
                 if first or args.reload:
                     try:
                         epds = load_epds(
-                            args.filename, args.plyBegin, args.plyEnd, args.TBsearch
+                            args.filename,
+                            args.excludeFile,
+                            args.plyBegin,
+                            args.plyEnd,
+                            args.TBsearch,
                         )
                         if args.shuffle:
                             random.shuffle(epds)
