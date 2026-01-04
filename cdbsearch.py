@@ -65,14 +65,7 @@ class AtomicInteger:
 
 class ChessDB:
     def __init__(
-        self,
-        concurrency,
-        evalDecay,
-        cursedWins=False,
-        TBsearch=False,
-        rootBoard=chess.Board(),
-        user=None,
-        showErrors=True,
+        self, concurrency, evalDecay, cursedWins, TBsearch, rootBoard, user, showErrors
     ):
         # user defined parameters
         self.concurrency = concurrency
@@ -162,7 +155,7 @@ class ChessDB:
             pv = content["pv"]
             self.cdbPvToLeaf[epd] = len(pv)
             asyncio.ensure_future(self.queryall(epd))
-            board = chess.Board(epd)
+            board = chess.Board(epd, chess960=True)
             for parsed, ucimove in enumerate(pv):
                 board.push(chess.Move.from_uci(ucimove))
                 self.cdbPvToLeaf[board.epd()] = len(pv) - 1 - parsed
@@ -306,7 +299,7 @@ class ChessDB:
                     if content == {}:
                         # the position is not available in cdb (EGTB w/ castling rights) - score all moves as 1cp, and let search figure it out
                         found = True
-                        board = chess.Board(epd)
+                        board = chess.Board(epd, chess960=True)
                         for move in board.legal_moves:
                             result[move.uci()] = 1  # we reserve 0 for EGTB draws
                         lasterror = "Position not queued"
@@ -331,7 +324,14 @@ class ChessDB:
                                 else:
                                     # to stay in sync with cdb evals, we need to counter-act the bestscore off-set applied later on
                                     s += 1 if s >= 0 else -1
-                            result[m["uci"]] = s
+                            ucimove = m["uci"]
+                            # we always use chess960 (KxR) castling notation
+                            if ucimove in ["e1g1", "e1c1", "e8g8", "e8c8"]:
+                                board = chess.Board(epd, chess960=True)
+                                move = board.parse_uci(ucimove)
+                                if board.is_castling(move):
+                                    ucimove = board.uci(move)
+                            result[ucimove] = s
                     except Exception:
                         # we do not trust possibly partial move information
                         found = False
@@ -590,17 +590,18 @@ async def cdbsearch(
     else:
         epdMoves = []
     epd = epd.strip()  # avoid leading and trailing spaces in URL below
-    board = chess.Board(epd)
+    board = chess.Board(epd, chess960=True)
     pushedMoves = []
-    for move in epdMoves:
-        uci = chess.Move.from_uci(move)
-        if not uci in board.legal_moves:
+    for ucimove in epdMoves:
+        try:
+            move = board.parse_uci(ucimove)
+        except Exception:
             print(
-                f' - Warning: Encountered illegal move {move} at position "{board.epd()}". Ignoring this and all following moves.'
+                f' - Warning: Encountered illegal move {ucimove} at position "{board.epd()}". Ignoring this and all following moves.'
             )
             break
-        board.push(uci)
-        pushedMoves.append(move)
+        board.push(move)
+        pushedMoves.append(ucimove)
     epdMoves = pushedMoves
 
     # create a ChessDB
@@ -757,7 +758,7 @@ if __name__ == "__main__":
         else:
             epd = chess.STARTING_FEN  # passing empty string to --san gives startpos
     else:
-        epd = args.epd.replace("startpos", chess.STARTING_FEN[:-3])
+        epd = args.epd.replace("startpos", chess.STARTING_FEN[:-4])
 
     asyncio.run(
         cdbsearch(
