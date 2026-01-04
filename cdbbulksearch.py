@@ -58,7 +58,7 @@ def load_epdlist(filename):
                 if line.startswith("#"):  # ignore comments
                     continue
                 line = line.split(";")[0]  # ignore epd opcodes
-                line = line.replace("startpos", chess.STARTING_FEN[:-3])
+                line = line.replace("startpos", chess.STARTING_FEN[:-4])
                 epd, _, moves = line.partition("moves")
                 epd = epd.split()[:6]  # include potential move counters
                 if len(epd) == 6 and not (epd[4].isnumeric() and epd[5].isnumeric()):
