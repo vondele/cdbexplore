@@ -10,6 +10,7 @@ CDB_EGTB = 7
 
 def wrapcdbsearch(
     epd,
+    chess960,
     depthLimit,
     timeLimit,
     concurrency,
@@ -26,6 +27,7 @@ def wrapcdbsearch(
         asyncio.run(
             cdbsearch.cdbsearch(
                 epd=epd,
+                chess960=chess960,
                 depthLimit=depthLimit,
                 timeLimit=timeLimit,
                 concurrency=concurrency,
@@ -172,6 +174,11 @@ if __name__ == "__main__":
     argParser.add_argument(
         "--excludeFile",
         help="A file with FENs/EPDs that should not be loaded from filename.",
+    )
+    argParser.add_argument(
+        "--chess960",
+        action="store_true",
+        help="Enable chess960.",
     )
     argParser.add_argument(
         "--plyBegin",
@@ -330,6 +337,7 @@ if __name__ == "__main__":
                 future = executor.submit(
                     wrapcdbsearch,
                     epd=epd,
+                    chess960=args.chess960,
                     depthLimit=depthLimit,
                     timeLimit=args.timeLimit,
                     concurrency=args.concurrency,
