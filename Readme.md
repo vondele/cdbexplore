@@ -14,7 +14,7 @@ Using some concurrency, fairly deep exploration is quickly possible.
 This is a command line program to explore a single position.
 
 ```
-usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--depthLimit DEPTHLIMIT] [--timeLimit TIMELIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--TBsearch] [--proveMates] [--user USER] [--suppressErrors]
+usage: cdbsearch.py [-h] [--epd EPD | --san SAN] [--chess960] [--depthLimit DEPTHLIMIT] [--timeLimit TIMELIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--TBsearch] [--proveMates] [--user USER] [--suppressErrors]
 
 Explore and extend the Chess Cloud Database (https://chessdb.cn/queryc_en/). Builds a search tree for a given position.
 
@@ -22,6 +22,7 @@ options:
   -h, --help            show this help message and exit
   --epd EPD             EPD/FEN to explore: acceptable are FENs w/ and w/o move counters, as well as the extended "['startpos'|FEN] moves m1 m2 m3" syntax. (default: startpos moves g2g4)
   --san SAN             Moves in SAN notation that lead to the position to be explored. E.g. "1. g4". (default: None)
+  --chess960            Enable chess960. (default: False)
   --depthLimit DEPTHLIMIT
                         Finish the exploration at the specified depth. (default: None)
   --timeLimit TIMELIMIT
@@ -41,25 +42,27 @@ Sample output:
 
 ```
 Search at depth  8
-  cdb PV len:  70
-  score     :  143
-  PV        :  d7d5 e2e3 b8c6 d2d4 e7e5 b1c3 c8e6 d4e5 c6e5 h2h3 h7h5 g1f3 e5f3 d1f3 h5g4 h3g4 e6g4 f3g2 h8h1 g2h1 g8f6 c1d2 d8d6 c3b5 d6b6 f2f3 a7a6 b5c3 g4f5
-  PV len    :  29
-  level     :  39
-  max level :  47
-  queryall  :  1596
-  bf        :  2.51
-  chessdbq  :  578 (36.22% of queryall)
+  position  :  rnbqkbnr/pppppppp/8/8/6P1/8/PPPPPP1P/RNBQKBNR b KQkq -
+  cdb PV len:  39
+  score     :  174
+  PV        :  d7d5 c2c4 c8g4 d1b3 e7e6 h2h3 g4f5 c4d5 d8d5 b3d5 e6d5 b1c3 c7c6 g1f3 f8d6 f3d4 f5g6 h3h4 g8f6 f1h3
+  PV len    :  20
+  level     :  25
+  max level :  39
+  queryall  :  1409
+  bf        :  2.48
+  chessdbq  :  713 (50.60% of queryall)
   enqueued  :  8
   requeued  :  0
   unscored  :  0 (0.00% of enqueued)
-  reprobed  :  75 (12.98% of chessdbq)
-  inflightQ :  26.69
-  inflightR :  8.21
-  cdb time  :  223
-  date      :  2023-06-21T08:17:28.101875
-  total time:  0:02:09.36
-  URL       :  https://chessdb.cn/queryc_en/?rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR_w_KQkq_-_moves_g2g4_d7d5_e2e3_b8c6_d2d4_e7e5_b1c3_c8e6_d4e5_c6e5_h2h3_h7h5_g1f3_e5f3_d1f3_h5g4_h3g4_e6g4_f3g2_h8h1_g2h1_g8f6_c1d2_d8d6_c3b5_d6b6_f2f3_a7a6_b5c3_g4f5
+  reprobed  :  113 (15.85% of chessdbq)
+  inflightQ :  38.71
+  inflightR :  11.15
+  cdb time  :  22
+  date      :  2026-01-05T21:05:02.452997
+  total time:  0:00:16.24
+  URL       :
+https://chessdb.cn/queryc_en/?rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR_w_KQkq_-_moves_g2g4_d7d5_c2c4_c8g4_d1b3_e7e6_h2h3_g4f5_c4d5_d8d5_b3d5_e6d5_b1c3_c7c6_g1f3_f8d6_f3d4_f5g6_h3h4_g8f6_f1h3
 ```
 
 Meaning of the fields:
@@ -94,27 +97,28 @@ Root position:  3r4/3N2kr/1p6/pBpn1p2/Q2PR1p1/P7/1P4P1/2q3K1 w - -
 evalDecay    :  0
 Concurrency  :  16
 Prove Mates  :  True
-Starting date:  2023-06-18T18:58:14.335194
+Starting date:  2026-01-05T21:05:30.827169
 Search at depth  1
+  position  :  3r4/3N2kr/1p6/pBpn1p2/Q2PR1p1/P7/1P4P1/2q3K1 w - -
   cdb PV len:  10
   score     :  -29990
-  PV        :  a4d1 c1d1 g1f2 f5e4 b5a6 h7h1 a6f1 d1d2 f2g3 d2f4 CHECKMATE (#-5)
+  PV        :  g1f2 f5e4 a4b3 h7h1 b3c3 d5c3 b5f1 c1f4 f2e1 f4e3 CHECKMATE (#-5)
   PV len    :  10
   level     :  10
   max level :  10
-  queryall  :  1504
-  bf        :  1504.00
-  chessdbq  :  1117 (74.27% of queryall)
+  queryall  :  3332
+  bf        :  3332.00
+  chessdbq  :  1965 (58.97% of queryall)
   enqueued  :  0
   requeued  :  0
   unscored  :  0 (0.00% of enqueued)
-  reprobed  :  10 (0.90% of chessdbq)
-  inflightQ :  9.22
-  inflightR :  2.61
-  cdb time  :  117
-  date      :  2023-06-18T19:00:25.868435
-  total time:  0:02:11.53
-  URL       :  https://chessdb.cn/queryc_en/?3r4/3N2kr/1p6/pBpn1p2/Q2PR1p1/P7/1P4P1/2q3K1_w_-_-_moves_a4d1_c1d1_g1f2_f5e4_b5a6_h7h1_a6f1_d1d2_f2g3_d2f4
+  reprobed  :  10 (0.51% of chessdbq)
+  inflightQ :  15.87
+  inflightR :  5.91
+  cdb time  :  61
+  date      :  2026-01-05T21:07:30.809123
+  total time:  0:01:59.98
+  URL       :  https://chessdb.cn/queryc_en/?3r4/3N2kr/1p6/pBpn1p2/Q2PR1p1/P7/1P4P1/2q3K1_w_-_-_moves_g1f2_f5e4_a4b3_h7h1_b3c3_d5c3_b5f1_c1f4_f2e1_f4e3
 ```
 
 ## `cdbbulksearch`
@@ -122,7 +126,7 @@ Search at depth  1
 This is a command line program to sequentially explore several positions.
 
 ```
-usage: cdbbulksearch.py [-h] [--excludeFile EXCLUDEFILE] [--plyBegin PLYBEGIN] [--plyEnd PLYEND] [--shuffle] [--depthLimit DEPTHLIMIT] [--timeLimit TIMELIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--TBsearch] [--proveMates] [--user USER] [--suppressErrors] [--bulkConcurrency BULKCONCURRENCY] [--forever] [--maxDepthLimit MAXDEPTHLIMIT] [--reload] filename
+usage: cdbbulksearch.py [-h] [--excludeFile EXCLUDEFILE] [--chess960] [--plyBegin PLYBEGIN] [--plyEnd PLYEND] [--shuffle] [--depthLimit DEPTHLIMIT] [--timeLimit TIMELIMIT] [--concurrency CONCURRENCY] [--evalDecay EVALDECAY] [--cursedWins] [--TBsearch] [--proveMates] [--user USER] [--suppressErrors] [--bulkConcurrency BULKCONCURRENCY] [--forever] [--maxDepthLimit MAXDEPTHLIMIT] [--reload] filename
 
 Invoke cdbsearch for positions loaded from a file.
 
@@ -133,6 +137,7 @@ options:
   -h, --help            show this help message and exit
   --excludeFile EXCLUDEFILE
                         A file with FENs/EPDs that should not be loaded from filename. (default: None)
+  --chess960            Enable chess960. (default: False)
   --plyBegin PLYBEGIN   Ply in each line of filename from which positions will be searched by cdbsearch. A value of 0 corresponds to the starting FEN without any moves played. Negative values count from the back, as per the Python standard. (default: -1)
   --plyEnd PLYEND       Ply in each line of filename until which positions will be searched by cdbsearch. A value of None means including the final move of the line. (default: None)
   --shuffle             Shuffle the positions to be searched randomly. (default: False)
@@ -155,14 +160,13 @@ options:
   --maxDepthLimit MAXDEPTHLIMIT
                         Upper bound for dynamically increasing depthLimit. (default: None)
   --reload              Reload positions from filename when tasks for new cycle are needed. (default: False)
-
 ```
 
 Example:
 ```shell
 echo -e '[Event "*"]\n\n1. g4 *\n\n1. g4 d5 *\n' > book.pgn
 git clone https://github.com/vondele/cdbexplore && pip install -r cdbexplore/requirements.txt
-python3 cdbexplore/cdbbulksearch.py book.pgn --forever >& cdbsearch_book.log &
+python cdbexplore/cdbbulksearch.py book.pgn --forever >& cdbsearch_book.log &
 ```
 
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)

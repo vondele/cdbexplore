@@ -140,7 +140,7 @@ class ChessDB:
                 timeout,
             )
 
-    async def add_cdb_pv_positions(self, epd):
+    async def add_cdb_pv_positions(self, epd, chess960):
         """query cdb for the PV of the position and create a dictionary containing these positions and their distance to the PV leaf for extensions during search"""
         content, first = {}, True
         while not (content and "status" in content):
@@ -154,19 +154,19 @@ class ChessDB:
         if content["status"] == "ok" and "pv" in content:
             pv = content["pv"]
             self.cdbPvToLeaf[epd] = len(pv)
-            asyncio.ensure_future(self.queryall(epd))
-            board = chess.Board(epd, chess960=True)
+            asyncio.ensure_future(self.queryall(epd, chess960))
+            board = chess.Board(epd, chess960=chess960)
             for parsed, ucimove in enumerate(pv):
                 board.push(chess.Move.from_uci(ucimove))
                 self.cdbPvToLeaf[board.epd()] = len(pv) - 1 - parsed
-                asyncio.ensure_future(self.queryall(board.epd()))
+                asyncio.ensure_future(self.queryall(board.epd(), chess960))
 
     async def obtain_PV(self, board, depth):
         """obtain the PV line for position on board, to the specified depth"""
         t = self.check_trivial_PV(board)
         if t is not None:
             return t[1]
-        scored_db_moves = await self.queryall(board.epd())
+        scored_db_moves = await self.queryall(board.epd(), board.chess960)
         if scored_db_moves == {}:
             return ["invalid"]
         if depth == 0:
@@ -190,13 +190,13 @@ class ChessDB:
             board.push(chess.Move.from_uci(pv[0]))
             return await self.pv_has_proven_mate(board.copy(), pv[1:])
 
-        scored_db_moves = await self.queryall(board.epd())
+        scored_db_moves = await self.queryall(board.epd(), board.chess960)
         if len(scored_db_moves) - 1 < len(list(board.legal_moves)):
             # there are unscored moves: help to construct a proof by querying all of them
             for move in board.legal_moves:
                 if move.uci() not in scored_db_moves:
                     board.push(move)
-                    asyncio.ensure_future(self.queryall(board.epd()))
+                    asyncio.ensure_future(self.queryall(board.epd(), board.chess960))
                     self.count_unscored.inc()
                     board.pop()
             return False
@@ -228,7 +228,7 @@ class ChessDB:
 
         return True
 
-    async def queryall(self, epd, skipTT=False):
+    async def queryall(self, epd, chess960, skipTT=False):
         """query chessdb until scored moves come back"""
 
         # book keeping of calls and average in flight requests.
@@ -299,7 +299,7 @@ class ChessDB:
                     if content == {}:
                         # the position is not available in cdb (EGTB w/ castling rights) - score all moves as 1cp, and let search figure it out
                         found = True
-                        board = chess.Board(epd, chess960=True)
+                        board = chess.Board(epd, chess960=chess960)
                         for move in board.legal_moves:
                             result[move.uci()] = 1  # we reserve 0 for EGTB draws
                         lasterror = "Position not queued"
@@ -325,8 +325,8 @@ class ChessDB:
                                     # to stay in sync with cdb evals, we need to counter-act the bestscore off-set applied later on
                                     s += 1 if s >= 0 else -1
                             ucimove = m["uci"]
-                            # we always use chess960 (KxR) castling notation
-                            if ucimove in ["e1g1", "e1c1", "e8g8", "e8c8"]:
+                            if chess960 and ucimove in ["e1g1", "e1c1", "e8g8", "e8c8"]:
+                                # convert to chess960 (KxR) castling notation
                                 board = chess.Board(epd, chess960=True)
                                 move = board.parse_uci(ucimove)
                                 if board.is_castling(move):
@@ -359,7 +359,7 @@ class ChessDB:
         for ucimove in pv[: -1 if pv[-1] in ["checkmate", "draw", "EGTB"] else None]:
             board.push(chess.Move.from_uci(ucimove))
         while board.move_stack:
-            await self.queryall(board.epd(), skipTT=True)
+            await self.queryall(board.epd(), board.chess960, skipTT=True)
             self.count_reprobeQueryall.inc()
             board.pop()
 
@@ -392,7 +392,7 @@ class ChessDB:
 
         epd = board.epd()
         # get current ranking
-        scored_db_moves = await self.queryall(epd)
+        scored_db_moves = await self.queryall(epd, board.chess960)
         if scored_db_moves == {}:
             return 0, ["invalid"], level
 
@@ -422,7 +422,9 @@ class ChessDB:
         # force a query for high depth nodes that do not have a full list of scored moves: we use this to add newly scored moves to our TT
         skipTT_db_moves = None
         if (depth > depthForceQuery and scoredCount < movesCount) or missingCDBmoves:
-            skipTT_db_moves = asyncio.create_task(self.queryall(epd, skipTT=True))
+            skipTT_db_moves = asyncio.create_task(
+                self.queryall(epd, board.chess960, skipTT=True)
+            )
 
         bestscore = -(CDB_MATE + 1)
         bestmove = None
@@ -556,6 +558,7 @@ class ChessDB:
 
 async def cdbsearch(
     epd,
+    chess960,
     depthLimit,
     timeLimit,
     concurrency,
@@ -590,7 +593,7 @@ async def cdbsearch(
     else:
         epdMoves = []
     epd = epd.strip()  # avoid leading and trailing spaces in URL below
-    board = chess.Board(epd, chess960=True)
+    board = chess.Board(epd, chess960=chess960)
     pushedMoves = []
     for ucimove in epdMoves:
         try:
@@ -621,7 +624,8 @@ async def cdbsearch(
         timeLimit is None or runtime <= timeLimit
     ):
         print("Search at depth ", depth)
-        await chessdb.add_cdb_pv_positions(board.epd())
+        print("  position  : ", board.epd())
+        await chessdb.add_cdb_pv_positions(board.epd(), board.chess960)
         print("  cdb PV len: ", chessdb.cdbPvToLeaf.get(board.epd(), 0), flush=True)
         chessdb.rootDepth = depth
         bestscore, pv, level = await chessdb.search(board, depth)
@@ -700,6 +704,11 @@ if __name__ == "__main__":
         help='Moves in SAN notation that lead to the position to be explored. E.g. "1. g4".',
     )
     argParser.add_argument(
+        "--chess960",
+        action="store_true",
+        help="Enable chess960.",
+    )
+    argParser.add_argument(
         "--depthLimit",
         help="Finish the exploration at the specified depth.",
         type=int,
@@ -763,6 +772,7 @@ if __name__ == "__main__":
     asyncio.run(
         cdbsearch(
             epd=epd,
+            chess960=args.chess960,
             depthLimit=args.depthLimit,
             timeLimit=args.timeLimit,
             concurrency=args.concurrency,
